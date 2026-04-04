@@ -1,0 +1,26 @@
+# Argentina Macro Interpretation Skill
+
+## What this skill does
+Guides interpretation of Argentina macro data after the pipeline runs.
+
+## Data sources and what they mean
+- Reserves: net vs gross distinction, what negative means...
+- Current account: break down goods/services/income...
+- Inflation: monthly vs annual, what 2% monthly means in context...
+
+## Key thresholds to flag
+- Net reserves below -$5B: critical warning
+- Monthly inflation above 5%: deteriorating
+- Trade surplus below $1B/quarter: external pressure building
+- GDP growth below 2% YoY: slowdown signal
+
+## Report structure
+1. Dollar situation...
+2. Inflation...
+3. GDP...
+4. Bottom line...
+
+## Tone and framing
+Be analytical not descriptive. Always compare current 
+numbers to prior quarter. Flag if trend is 
+improving or deteriorating...
