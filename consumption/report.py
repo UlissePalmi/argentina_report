@@ -26,6 +26,8 @@ from fpdf import XPos, YPos
 
 from report.build import ArgentinaPDF, _safe
 from utils import CHARTS_DIR, REPORTS_DIR, get_logger
+import production.section  as prod_section
+import productivity.section as prodv_section
 
 log = get_logger("consumption.report")
 
@@ -208,60 +210,46 @@ CHART_STYLE = {
 }
 
 
-def chart_real_wages(df: pd.DataFrame) -> str | None:
-    """Bars: real_wage_yoy_pct. Line (RHS): real_wage_mom_pct."""
-    if "real_wage_yoy_pct" not in df.columns:
+def chart_yoy_mom(df: pd.DataFrame, yoy_col: str, mom_col: str,
+                  title: str, filename: str) -> str | None:
+    """Generic dual-axis chart: bars=YoY (LHS), line=MoM (RHS). Green/red colouring."""
+    if yoy_col not in df.columns:
         return None
-    needed = ["date", "real_wage_yoy_pct"] + (
-        ["real_wage_mom_pct"] if "real_wage_mom_pct" in df.columns else []
-    )
-    sub = df[needed].dropna(subset=["real_wage_yoy_pct"]).tail(24).copy()
+    needed = ["date", yoy_col] + ([mom_col] if mom_col in df.columns else [])
+    sub = df[needed].dropna(subset=[yoy_col]).tail(24).copy()
     if sub.empty:
         return None
 
     dates = pd.to_datetime(sub["date"])
-    path = str(CHARTS_DIR / "consumption_real_wages.png")
+    path = str(CHARTS_DIR / filename)
 
     with plt.rc_context(CHART_STYLE):
-        fig, ax1 = plt.subplots(figsize=(10, 4.5))
+        fig, ax1 = plt.subplots(figsize=(10, 4))
 
-        # Bars — YoY level
-        bar_colors = ["#2f9e44" if v >= 0 else "#c92a2a"
-                      for v in sub["real_wage_yoy_pct"]]
-        ax1.bar(dates, sub["real_wage_yoy_pct"], color=bar_colors, width=20, alpha=0.8,
-                label="Real wage YoY %")
+        bar_colors = ["#2f9e44" if v >= 0 else "#c92a2a" for v in sub[yoy_col]]
+        ax1.bar(dates, sub[yoy_col], color=bar_colors, width=20, alpha=0.8, label="YoY %")
         ax1.axhline(0, color="#495057", linewidth=0.8)
-        ax1.set_ylabel("Real Wage YoY %")
+        ax1.set_ylabel("YoY %")
 
-        # Line — actual MoM real wage change
         ax2 = ax1.twinx()
-        if "real_wage_mom_pct" in sub.columns and sub["real_wage_mom_pct"].notna().any():
-            ax2.plot(dates, sub["real_wage_mom_pct"], color="#1971c2", linewidth=1.8,
-                     marker="o", markersize=3, label="Real wage MoM %")
-        ax2.set_ylabel("Real Wage MoM %", color="#1971c2")
+        if mom_col in sub.columns and sub[mom_col].notna().any():
+            ax2.plot(dates, sub[mom_col], color="#1971c2", linewidth=1.8,
+                     marker="o", markersize=3, label="MoM %")
+        ax2.set_ylabel("MoM %", color="#1971c2")
         ax2.tick_params(axis="y", labelcolor="#1971c2")
 
-        # Align zeros: keep each axis' max, extend the min so zero sits at the same fraction
-        def _align_zeros(a1, a2):
-            for ax in (a1, a2):
-                lo, hi = ax.get_ylim()
-                if hi <= 0:
-                    continue  # all negative — don't adjust
-                r1 = abs(a1.get_ylim()[0]) / (a1.get_ylim()[1] - a1.get_ylim()[0])
-                r2 = abs(a2.get_ylim()[0]) / (a2.get_ylim()[1] - a2.get_ylim()[0])
-                r = max(r1, r2)
-                for a in (a1, a2):
-                    _, h = a.get_ylim()
-                    a.set_ylim(-r * h / (1 - r), h)
-                break
-        _align_zeros(ax1, ax2)
+        # Align zeros
+        lo1, hi1 = ax1.get_ylim()
+        lo2, hi2 = ax2.get_ylim()
+        if hi1 > 0 and hi2 > 0:
+            r = max(abs(lo1) / (hi1 - lo1), abs(lo2) / (hi2 - lo2))
+            ax1.set_ylim(-r * hi1 / (1 - r) if r < 1 else lo1, hi1)
+            ax2.set_ylim(-r * hi2 / (1 - r) if r < 1 else lo2, hi2)
 
         h1, l1 = ax1.get_legend_handles_labels()
         h2, l2 = ax2.get_legend_handles_labels()
         ax1.legend(h1 + h2, l1 + l2, loc="upper left", fontsize=8, framealpha=0.8)
-
-        ax1.set_title("Real Wage Growth: YoY % & MoM % (Fisher-adjusted)",
-                      fontsize=12, fontweight="bold", pad=10)
+        ax1.set_title(title, fontsize=11, fontweight="bold", pad=8)
         ax1.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
         plt.setp(ax1.xaxis.get_majorticklabels(), rotation=45, ha="right", fontsize=8)
         ax1.grid(axis="y", alpha=0.5)
@@ -274,13 +262,28 @@ def chart_real_wages(df: pd.DataFrame) -> str | None:
     return path
 
 
+def chart_real_wages(df: pd.DataFrame) -> str | None:
+    return chart_yoy_mom(
+        df,
+        yoy_col="real_wage_yoy_pct",
+        mom_col="real_wage_mom_pct",
+        title="Real Wages: YoY % & MoM % (Fisher-adjusted)",
+        filename="consumption_real_wages.png",
+    )
+
+
 # ---------------------------------------------------------------------------
 # Main builder
 # ---------------------------------------------------------------------------
-def build_consumption_report(consumption_df: pd.DataFrame | None,
-                              cpi_df:         pd.DataFrame | None = None,
-                              components_df:  pd.DataFrame | None = None,
-                              emae_df:        pd.DataFrame | None = None) -> Path:
+def build_productivity_report(consumption_df:  pd.DataFrame | None,
+                              cpi_df:          pd.DataFrame | None = None,
+                              components_df:   pd.DataFrame | None = None,
+                              emae_df:         pd.DataFrame | None = None,
+                              production_df:   pd.DataFrame | None = None,
+                              agro_df:         pd.DataFrame | None = None,
+                              productivity_df: pd.DataFrame | None = None,
+                              ucii_df:         pd.DataFrame | None = None,
+                              employment_df:   pd.DataFrame | None = None) -> Path:
     """
     Build the standalone consumption deep-dive PDF.
 
@@ -445,187 +448,31 @@ def build_consumption_report(consumption_df: pd.DataFrame | None,
     )
 
     # =========================================================
-    # Section 3 — Credit Expansion
+    # Section 3 — Production & Output
     # =========================================================
-    pdf.section_title("3. Credit Expansion")
-
-    pdf.body_text(
-        "Consumer and personal loans (BCRA series 91.1_PEFPGR_0_0_60) and total private-sector "
-        "loans (174.1_PTAMOS_O_0_0_29) are shown in nominal YoY % and real (Fisher-adjusted) YoY %. "
-        "In Argentina's high-inflation environment, nominal credit growth above 100% YoY may still "
-        "represent real contraction -- always read the real column."
-    )
-
-    credit_cols_avail = [c for c in [
-        "date",
-        "consumer_credit_yoy_pct", "real_consumer_credit_yoy_pct",
-        "total_credit_yoy_pct",    "real_total_credit_yoy_pct",
-    ] if c in df.columns]
-
-    if len(credit_cols_avail) > 1:
-        disp = df.copy()
-        disp["date"] = disp["date"].dt.strftime("%b %Y")
-        pct_cols = [c for c in credit_cols_avail if c != "date"]
-        pdf.add_table_n(
-            disp, credit_cols_avail,
-            fmt={c: "{:+.1f}%" for c in pct_cols},
-            title="Credit Growth — Nominal vs Real YoY % (last 24 months)",
-            limit=24,
-        )
-
-    # Credit vs wage spread
-    if "real_consumer_credit_yoy_pct" in df.columns and "real_wage_yoy_pct" in df.columns:
-        sub = df[["date", "real_wage_yoy_pct", "real_consumer_credit_yoy_pct"]].dropna().tail(3)
-        if not sub.empty:
-            spread = sub["real_consumer_credit_yoy_pct"].mean() - sub["real_wage_yoy_pct"].mean()
-            if spread > 20:
-                verdict = "households are leveraging up materially -- credit is outpacing income by " + _pct(spread)
-            elif spread > 5:
-                verdict = "moderate leverage build-up -- credit exceeds wage growth by " + _pct(spread)
-            elif spread > -5:
-                verdict = "credit growing in line with wages -- no material leverage signal"
-            else:
-                verdict = "credit growing slower than wages -- deleveraging / conservative borrowing"
-            pdf.body_text(f"Real credit vs real wage spread (3-month avg): {verdict}.")
-
-    pdf.note(
-        "Key distinction: if nominal credit YoY is 200% and CPI is 200%, real credit growth is 0%. "
-        "The Fisher-adjusted real columns are the actionable signal."
-    )
+    prod_section.build_section(pdf, production_df, agro_df)
 
     # =========================================================
-    # Section 4 — Savings Drawdown (Deposits)
+    # Section 4 — Productivity & Unit Labor Costs
     # =========================================================
-    pdf.section_title("4. Savings & Deposits")
-
-    pdf.body_text(
-        "Fixed-term peso deposits (BCRA series 334.2_SIST_FINANIJO__54, system-wide) are the most "
-        "liquid formal savings vehicle tracked in this dataset. Falling real deposits suggest "
-        "households are either spending savings or dollarising. "
-        "Important caveat: dollar deposits and real estate are not captured here."
-    )
-
-    dep_cols_avail = [c for c in ["date", "deposits_yoy_pct", "cpi_yoy_pct", "real_deposits_yoy_pct"]
-                      if c in df.columns]
-    if len(dep_cols_avail) > 1:
-        disp = df.copy()
-        disp["date"] = disp["date"].dt.strftime("%b %Y")
-        pct_cols = [c for c in dep_cols_avail if c != "date"]
-        pdf.add_table_n(
-            disp, dep_cols_avail,
-            fmt={c: "{:+.1f}%" for c in pct_cols},
-            title="Fixed-Term Deposits vs CPI -- Nominal vs Real YoY % (last 24 months)",
-            limit=24,
-        )
-
-    if "real_deposits_yoy_pct" in df.columns:
-        dep_latest = df["real_deposits_yoy_pct"].dropna().tail(1)
-        if not dep_latest.empty:
-            v = dep_latest.iloc[0]
-            if v > 10:
-                dep_read = "Real deposits are growing solidly -- households are saving, not dissaving."
-            elif v > -10:
-                dep_read = "Real deposits roughly flat (within +-10pp of CPI) -- neutral savings signal."
-            elif v > -30:
-                dep_read = "Real deposits declining -- households accumulating less in real terms. Monitor."
-            else:
-                dep_read = (
-                    "Real deposits falling sharply -- significant dissaving or dollarisation signal. "
-                    "Flag as consumption headwind once buffer exhausted."
-                )
-            pdf.body_text(dep_read)
-
-    # =========================================================
-    # Section 5 — Activity Context
-    # =========================================================
-    pdf.section_title("5. Activity Context")
-
-    # GDP components: C_pct
-    if components_df is not None and not components_df.empty:
-        pdf.subsection("5a. GDP Expenditure Components")
-        c_col  = next((c for c in components_df.columns if c.lower() in ("c_pct", "consumption_pct")), None)
-        gdp_col = next((c for c in components_df.columns if c.lower() in ("gdp_pct", "gdp_growth")), None)
-        comp_cols = ["date"] + [c for c in [c_col, gdp_col] if c is not None]
-        if len(comp_cols) > 1:
-            pdf.add_table_n(
-                components_df, comp_cols,
-                fmt={c: "{:+.1f}%" for c in comp_cols if c != "date"},
-                title="Private Consumption (C) vs GDP -- Real YoY % (last 8 quarters)",
-                limit=8,
-            )
-            pdf.note(
-                "C_pct: real private consumption YoY % from GDP expenditure accounts (INDEC). "
-                "GDP_pct: headline real GDP growth. Consumption growing above GDP = C is "
-                "disproportionately driving growth."
-            )
-        else:
-            pdf.body_text("GDP components data loaded but C_pct column not found.")
-    else:
-        pdf.body_text("GDP components data unavailable.")
-
-    # EMAE sectoral
-    if emae_df is not None and not emae_df.empty:
-        pdf.subsection("5b. EMAE Sectoral Activity")
-        sector_cols = [c for c in emae_df.columns
-                       if c not in ("date",) and "pct" in c and "emae" not in c.lower()]
-        emae_display_cols = ["date"] + sector_cols[:6]  # up to 6 sectors
-        if len(emae_display_cols) > 1:
-            pdf.add_table_n(
-                emae_df, emae_display_cols,
-                fmt={c: "{:+.1f}%" for c in emae_display_cols if c != "date"},
-                title="EMAE Sector Activity -- YoY % (last 12 months)",
-                limit=12,
-            )
-            pdf.note(
-                "comercio_pct (wholesale/retail trade) is the closest EMAE proxy for "
-                "consumption-linked activity. industria_pct (manufacturing) indicates "
-                "whether real wage gains are productivity-backed."
-            )
-        else:
-            pdf.body_text("EMAE data loaded but sector columns not found.")
-    else:
-        pdf.body_text("EMAE sectoral data unavailable.")
-
-    # =========================================================
-    # Section 6 — Full Data Appendix
-    # =========================================================
-    pdf.section_title("6. Full Data Appendix (24 months)")
-
-    all_pct_cols = [c for c in df.columns if c != "date"]
-    all_cols = ["date"] + all_pct_cols
-    disp = df.copy()
-    disp["date"] = disp["date"].dt.strftime("%b %Y")
-    pdf.add_table_n(
-        disp, all_cols,
-        fmt={c: "{:+.1f}%" for c in all_pct_cols},
-        title="All Consumption Driver Series -- YoY % (24 months)",
-        limit=24,
-    )
-    pdf.note(
-        "Columns: nominal_wage = private sector wage index YoY; "
-        "consumer_credit = consumer + personal loans YoY; "
-        "total_credit = all private sector loans YoY; "
-        "deposits = fixed-term peso deposits YoY; "
-        "cpi = INDEC national CPI YoY; "
-        "real_* = Fisher-adjusted real YoY."
-    )
+    prodv_section.build_section(pdf, productivity_df, ucii_df, employment_df)
 
     # =========================================================
     # Footer note
     # =========================================================
+
     pdf.ln(4)
     pdf.set_font("Helvetica", "I", 8)
     pdf.set_text_color(120, 120, 120)
     pdf.multi_cell(0, 4.5, _safe(
-        "Data sources: INDEC / datos.gob.ar series API (apis.datos.gob.ar/series/api). "
+        "Data sources: INDEC / datos.gob.ar. "
         "Wage index: 149.1_SOR_PRIADO_OCTU_0_25. "
-        "Consumer credit: 91.1_PEFPGR_0_0_60. "
-        "Total private credit: 174.1_PTAMOS_O_0_0_29. "
-        "Fixed-term deposits: 334.2_SIST_FINANIJO__54. "
-        "CPI: 148.3_INIVELNAL_DICI_M_26."
+        "IPI: 309.1_PRODUCCIONNAL_0_M_30. "
+        "CPI: 148.3_INIVELNAL_DICI_M_26. "
+        "Credit and savings detail: see financing_report.pdf"
     ))
 
-    out = REPORTS_DIR / "consumption_report.pdf"
+    out = REPORTS_DIR / "productivity_report.pdf"
     pdf.output(str(out))
-    log.info("Consumption report written -> %s", out)
+    log.info("Productivity report written -> %s", out)
     return out

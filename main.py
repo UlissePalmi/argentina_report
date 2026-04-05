@@ -20,10 +20,13 @@ from external.fetch    import (fetch_reserves, fetch_exchange_rate,
                                 fetch_external_debt, fetch_current_account_pct_gdp)
 from gdp.fetch         import fetch_gdp_growth, fetch_gdp_components, fetch_emae
 from inflation.fetch   import fetch_cpi
-from consumption.fetch  import fetch_consumption, compute_real_values
-from consumption.report import build_consumption_report
-from report.build       import build_report
-from utils              import get_logger
+from consumption.fetch   import fetch_consumption, compute_real_values
+from consumption.report  import build_productivity_report
+from financing.report    import build_financing_report
+from production.fetch    import fetch_production, fetch_agriculture
+from productivity.fetch  import fetch_employment, fetch_ucii, compute_productivity
+from report.build        import build_report
+from utils               import get_logger
 
 log = get_logger("main")
 
@@ -99,15 +102,59 @@ def run_pipeline() -> dict:
         consumption_df = compute_real_values(consumption_df, cpi_df)
 
     # ------------------------------------------------------------------
-    # Build consumption deep-dive report
+    # Production
     # ------------------------------------------------------------------
-    log.info("Building consumption deep-dive report...")
-    consumption_report_path = build_consumption_report(
+    log.info("[5/6]  Fetching production data (IPI, energy, ISAC)...")
+    production_df = fetch_production(months=24)
+    if production_df is None:
+        warnings.append("Production: FAILED -- check datos.gob.ar IPI/energy series")
+
+    log.info("[5/6b] Fetching agriculture (annual harvest)...")
+    agro_df = fetch_agriculture(years=8)
+    if agro_df is None:
+        warnings.append("Agriculture: FAILED -- check AGRO_A_* series")
+
+    # ------------------------------------------------------------------
+    # Productivity
+    # ------------------------------------------------------------------
+    log.info("[6/6a] Fetching SIPA employment by sector...")
+    employment_df = fetch_employment(quarters=12)
+    if employment_df is None:
+        warnings.append("Employment: FAILED -- check SIPA series")
+
+    log.info("[6/6b] Fetching capacity utilization (UCII)...")
+    ucii_df = fetch_ucii(months=24)
+    if ucii_df is None:
+        warnings.append("UCII: FAILED -- check capacity utilization series")
+
+    log.info("[6/6c] Computing productivity and ULC...")
+    productivity_df = None
+    if emae_df is not None and employment_df is not None:
+        productivity_df = compute_productivity(emae_df, employment_df, consumption_df)
+    else:
+        warnings.append("Productivity: SKIPPED -- requires EMAE + employment data")
+
+    # ------------------------------------------------------------------
+    # Build productivity deep-dive report
+    # ------------------------------------------------------------------
+    log.info("Building productivity deep-dive report...")
+    productivity_report_path = build_productivity_report(
         consumption_df=consumption_df,
         cpi_df=cpi_df,
         components_df=components_df,
         emae_df=emae_df,
+        production_df=production_df,
+        agro_df=agro_df,
+        productivity_df=productivity_df,
+        ucii_df=ucii_df,
+        employment_df=employment_df,
     )
+
+    # ------------------------------------------------------------------
+    # Build financing report
+    # ------------------------------------------------------------------
+    log.info("Building financing report...")
+    financing_report_path = build_financing_report(consumption_df=consumption_df)
 
     # ------------------------------------------------------------------
     # Build main report
@@ -140,7 +187,8 @@ def run_pipeline() -> dict:
     log.info("Pipeline complete.")
     log.info("PDF:      %s", report_path["pdf"])
     log.info("Markdown: %s", report_path["md"])
-    log.info("Consumption report: %s", consumption_report_path)
+    log.info("Productivity report: %s", productivity_report_path)
+    log.info("Financing report:    %s", financing_report_path)
 
     all_dfs = {
         "reserves": reserves_df, "fx": fx_df, "ca": ca_df, "trade": trade_df,
@@ -157,16 +205,18 @@ def run_pipeline() -> dict:
         for w in warnings:
             log.warning("  * %s", w)
     log.info("=" * 60)
-    report_path["consumption_report"] = consumption_report_path
+    report_path["productivity_report"] = productivity_report_path
+    report_path["financing_report"]    = financing_report_path
     return report_path
 
 
 if __name__ == "__main__":
     try:
         paths = run_pipeline()
-        print(f"\nPDF:               {paths['pdf']}")
-        print(f"Markdown:          {paths['md']}")
-        print(f"Consumption report:{paths.get('consumption_report', 'n/a')}")
+        print(f"\nPDF:                {paths['pdf']}")
+        print(f"Markdown:           {paths['md']}")
+        print(f"Productivity report:{paths.get('productivity_report', 'n/a')}")
+        print(f"Financing report:   {paths.get('financing_report', 'n/a')}")
         sys.exit(0)
     except KeyboardInterrupt:
         print("\nInterrupted.")

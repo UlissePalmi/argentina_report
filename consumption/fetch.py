@@ -32,9 +32,22 @@ log = get_logger("consumption.fetch")
 
 SERIES_BASE  = "https://apis.datos.gob.ar/series/api/series/"
 WAGE_ID      = "149.1_SOR_PRIADO_OCTU_0_25"
-CREDIT_ID    = "91.1_PEFPGR_0_0_60"
-TOTAL_CR_ID  = "174.1_PTAMOS_O_0_0_29"
+CREDIT_ID    = "91.1_PEFPGR_0_0_60"       # consumer + personal (pesos + dollars)
+TOTAL_CR_ID  = "174.1_PTAMOS_O_0_0_29"    # total private sector loans
 DEPOSITS_ID  = "334.2_SIST_FINANIJO__54"
+
+# Granular credit breakdown — pesos only (BCRA)
+CREDIT_SERIES = {
+    # Consumption credit
+    "personal_loans_pct": "91.1_DETALLE_PRLES_0_0_52",  # préstamos personales
+    "credit_cards_pct":   "91.1_DETALLE_PRTAS_0_0_60",  # tarjetas de crédito
+    # Real-asset backed
+    "mortgages_pct":      "91.1_DETALLE_PRPOT_0_0_53",  # hipotecarios
+    "auto_loans_pct":     "91.1_DETALLE_PREND_0_0_53",  # prendarios
+    # Commercial / productive
+    "overdrafts_pct":     "91.1_DETALLE_PRTOS_0_0_55",  # adelantos
+    "commercial_paper_pct": "91.1_DETALLE_PRTOS_0_0_56",# documentos
+}
 
 
 def _fetch_series(ids: list[str], limit: int, start_date: str) -> pd.DataFrame | None:
@@ -64,6 +77,7 @@ def fetch_consumption(months: int = 24) -> pd.DataFrame | None:
 
     batch1 = _fetch_series([WAGE_ID], limit=limit, start_date=start)
     batch2 = _fetch_series([CREDIT_ID, TOTAL_CR_ID, DEPOSITS_ID], limit=limit, start_date=start)
+    batch3 = _fetch_series(list(CREDIT_SERIES.values()), limit=limit, start_date=start)
 
     if batch1 is None or batch1.empty:
         log.warning("fetch_consumption: wages batch failed.")
@@ -95,6 +109,24 @@ def fetch_consumption(months: int = 24) -> pd.DataFrame | None:
             )
     else:
         log.warning("fetch_consumption: credit/deposits batch failed.")
+
+    # Granular credit breakdown — YoY and MoM
+    if batch3 is not None and not batch3.empty:
+        id_to_col = {v: k for k, v in CREDIT_SERIES.items()}
+        for series_id, col_name in id_to_col.items():
+            if series_id in batch3.columns:
+                batch3[col_name]                       = batch3[series_id].pct_change(12) * 100
+                batch3[col_name.replace("_pct", "_mom_pct")] = batch3[series_id].pct_change(1)  * 100
+        gran_cols = [c for c in batch3.columns
+                     if any(c == n or c == n.replace("_pct", "_mom_pct")
+                            for n in id_to_col.values())]
+        if gran_cols:
+            result = result.merge(
+                batch3[["date"] + gran_cols].dropna(subset=gran_cols, how="all"),
+                on="date", how="left"
+            )
+    else:
+        log.warning("fetch_consumption: granular credit batch failed.")
 
     yoy_cols = [c for c in result.columns if c != "date"]
     result = result.dropna(subset=yoy_cols, how="all").tail(months).reset_index(drop=True)
@@ -137,6 +169,13 @@ def compute_real_values(consumption_df: pd.DataFrame, cpi_df: pd.DataFrame) -> p
         "consumer_credit_yoy_pct":    "real_consumer_credit_yoy_pct",
         "total_credit_yoy_pct":       "real_total_credit_yoy_pct",
         "deposits_yoy_pct":           "real_deposits_yoy_pct",
+        # Granular credit breakdown
+        "personal_loans_pct":         "real_personal_loans_pct",
+        "credit_cards_pct":           "real_credit_cards_pct",
+        "mortgages_pct":              "real_mortgages_pct",
+        "auto_loans_pct":             "real_auto_loans_pct",
+        "overdrafts_pct":             "real_overdrafts_pct",
+        "commercial_paper_pct":       "real_commercial_paper_pct",
     }
     for nom, real in NOMINAL_REAL.items():
         if nom in df.columns and "cpi_yoy_pct" in df.columns:
@@ -145,11 +184,19 @@ def compute_real_values(consumption_df: pd.DataFrame, cpi_df: pd.DataFrame) -> p
             # e.g. nominal=430%, CPI=84% → simple gives 346%, Fisher gives 188%
             df[real] = (((1 + df[nom] / 100) / (1 + df["cpi_yoy_pct"] / 100)) - 1) * 100
 
-    # Real wage MoM: Fisher using nominal wage MoM and CPI MoM
-    if "nominal_wage_mom_pct" in df.columns and "cpi_mom_pct" in df.columns:
-        df["real_wage_mom_pct"] = (
-            ((1 + df["nominal_wage_mom_pct"] / 100) / (1 + df["cpi_mom_pct"] / 100)) - 1
-        ) * 100
+    # Real MoM: Fisher for wages and all granular credit series
+    MOM_PAIRS = {
+        "nominal_wage_mom_pct":          "real_wage_mom_pct",
+        "personal_loans_mom_pct":        "real_personal_loans_mom_pct",
+        "credit_cards_mom_pct":          "real_credit_cards_mom_pct",
+        "mortgages_mom_pct":             "real_mortgages_mom_pct",
+        "auto_loans_mom_pct":            "real_auto_loans_mom_pct",
+        "overdrafts_mom_pct":            "real_overdrafts_mom_pct",
+        "commercial_paper_mom_pct":      "real_commercial_paper_mom_pct",
+    }
+    for nom, real in MOM_PAIRS.items():
+        if nom in df.columns and "cpi_mom_pct" in df.columns:
+            df[real] = (((1 + df[nom] / 100) / (1 + df["cpi_mom_pct"] / 100)) - 1) * 100
 
     out = CONSUMPTION_DIR / "consumption.csv"
     df.to_csv(out, index=False)

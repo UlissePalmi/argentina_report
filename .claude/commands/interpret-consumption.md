@@ -43,17 +43,51 @@ Use the most recent 3-month average to smooth noise from monthly volatility.
 
 ## Step 3 — Credit expansion
 
-From `consumption.csv`, read `consumer_credit_yoy_pct` (consumer + personal loans) and `total_credit_yoy_pct` (all private loans) for the last 6 months.
+From `consumption.csv`, read the granular credit breakdown for the last 6 months:
 
-Key comparison: **consumer_credit_yoy_pct vs nominal_wage_yoy_pct**
+| Column | Category | What it means |
+|---|---|---|
+| `real_personal_loans_pct` | Consumption | Personal loans — direct household spending |
+| `real_credit_cards_pct` | Consumption | Credit cards — direct household spending |
+| `real_mortgages_pct` | Asset | Housing investment |
+| `real_auto_loans_pct` | Asset | Auto purchase |
+| `real_overdrafts_pct` | Business | Working capital for firms |
+| `real_commercial_paper_pct` | Business | Commercial financing |
 
-Interpret:
-- **credit YoY < wage YoY:** Credit is growing in line with or slower than incomes → consumption is not leverage-driven. Low concern.
-- **credit YoY > wage YoY by 5–15pp:** Households are leveraging up moderately. Monitor.
-- **credit YoY > wage YoY by >20pp:** Credit is clearly outpacing income growth → households borrowing to maintain consumption. Flag explicitly.
-- **credit YoY > 100%:** In Argentina's high-inflation context, check whether this is real growth or just nominal. If CPI is also 100%+, real credit growth may be flat or negative — state this explicitly.
+Also read `real_personal_loans_mom_pct`, `real_credit_cards_mom_pct`, `real_overdrafts_mom_pct`, `real_commercial_paper_mom_pct` for MoM signals.
 
-**Important inflation adjustment:** In Argentina, nominal credit growth must always be compared against CPI to assess real growth. Real credit growth = consumer_credit_yoy_pct − cpi_yoy_pct. If real credit growth is negative despite high nominal growth, credit is actually contracting in real terms — this is deflationary for consumption.
+**3a — Consumption lending (personal loans + credit cards)**
+
+Key comparison: consumption credit YoY vs real wage YoY.
+
+- **consumption credit YoY < real wage YoY:** Credit not outpacing incomes → low leverage concern.
+- **consumption credit YoY > real wage YoY by 5–15pp:** Moderate leverage build-up. Monitor.
+- **consumption credit YoY > real wage YoY by >20pp:** Households borrowing to consume. Flag explicitly.
+
+**Base effect rule — apply before interpreting any YoY number:**
+
+Argentina's credit market collapsed in 2019–2020 and again in 2023. Any series coming off a depressed base will show mechanically high YoY even if the recovery is slowing. Use this three-step check:
+
+**Step 1: Check MoM — is the level still growing?**
+- MoM positive → normalization; YoY deceleration is mechanical, not alarming
+- MoM negative → genuine contraction; flag regardless of YoY level
+
+**Step 2: Compare level to pre-crisis trend**
+- Is the current level above, at, or below where it would have been without the crisis?
+- If still below trend → more room to normalize; high YoY reflects catch-up, not new leverage
+- If back at or above trend → normalization complete; further growth is new leverage
+
+**Step 3: Only after steps 1 and 2 interpret the YoY number**
+
+**3b — Business borrowing (overdrafts + commercial paper)**
+
+Rising business credit is productive if it funds working capital and investment. It is a warning sign if firms are borrowing to cover operating losses (roll-over of distressed debt).
+
+- **business credit YoY >> consumption credit YoY:** Credit expansion is firm-led, not household-led. Less inflationary for consumption, but monitor for firm distress if real rates are high.
+- **business credit YoY << consumption credit YoY:** Households are the marginal borrower. Direct consumption implication.
+- Apply the same base-effect three-step check to business credit before interpreting YoY.
+
+**Important inflation adjustment:** All columns in `consumption.csv` prefixed with `real_` are Fisher-adjusted. Use only these. Nominal series are stored for reference but should not be used in interpretation.
 
 ---
 
