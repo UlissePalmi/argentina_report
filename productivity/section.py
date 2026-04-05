@@ -133,7 +133,7 @@ def build_section(pdf, productivity_df: pd.DataFrame | None,
     """
     Section 4: Productivity & Unit Labor Costs.
     """
-    pdf.section_title("4. Productivity & Unit Labor Costs")
+    pdf.section_title("5. Productivity & Unit Labor Costs")
 
     pdf.body_text(
         "Productivity YoY = EMAE sector output YoY minus sector employment YoY. "
@@ -209,30 +209,34 @@ def build_section(pdf, productivity_df: pd.DataFrame | None,
     pdf.subsection("4c. Manufacturing Capacity Utilization")
     pdf.body_text(
         "Sector-level UCII (% of installed capacity used). "
-        "No single headline UCII series available on datos.gob.ar; "
-        "metals, textiles, and automotive are shown as a proxy basket."
+        "Source: INDEC distribution CSV (base 2004). "
+        "Metals, textiles, and automotive are shown; average is the mean of those three sectors."
     )
 
     if ucii_df is not None and not ucii_df.empty:
         ucii_disp = ucii_df.copy()
-        ucii_disp["date"] = pd.to_datetime(ucii_disp["date"]).dt.strftime("%b %Y")
+        # Only keep columns that actually have data
         ucii_cols = [c for c in ["ucii_metals_pct", "ucii_textiles_pct",
-                                   "ucii_auto_pct", "ucii_avg_pct"] if c in ucii_disp.columns]
-        rename_u = {c: c.replace("ucii_", "").replace("_pct", "").title()
-                    for c in ucii_cols}
-        ucii_disp = ucii_disp.rename(columns=rename_u)
-        pdf.add_table_n(
-            ucii_disp, ["date"] + list(rename_u.values()),
-            fmt={c: "{:.1f}%" for c in rename_u.values()},
-            title="Capacity Utilization by Sector (% of installed capacity)",
-            limit=24,
-        )
+                                   "ucii_auto_pct", "ucii_avg_pct"]
+                     if c in ucii_disp.columns and ucii_disp[c].notna().any()]
+        if ucii_cols:
+            rename_u = {c: c.replace("ucii_", "").replace("_pct", "").title()
+                        for c in ucii_cols}
+            ucii_disp = ucii_disp.rename(columns=rename_u)
+            ucii_disp["date"] = pd.to_datetime(ucii_disp["date"]).dt.strftime("%b %Y")
+            pdf.add_table_n(
+                ucii_disp, ["date"] + list(rename_u.values()),
+                fmt={c: "{:.1f}%" for c in rename_u.values()},
+                title="Capacity Utilization by Sector (% of installed capacity)",
+                limit=24,
+            )
+        else:
+            pdf.body_text("Capacity utilization data unavailable.")
     else:
         pdf.body_text("Capacity utilization data unavailable.")
 
     pdf.note(
         "Employment: SIPA sector data (155.1_ISTRIARIA/CTRUCCIION/SICIOSIOS_C_0_0_*), quarterly. "
         "Output: EMAE sectoral YoY (gdp/emae.csv). "
-        "UCII: 31.3_UIMB_2004_M_33 (metals), 29.3_UPT_2006_M_23 (textiles), "
-        "29.3_UV_2006_M_25 (automotive)."
+        "UCII: INDEC distribution CSV (dataset 31, distribution 31.3); metals, textiles, automotive."
     )

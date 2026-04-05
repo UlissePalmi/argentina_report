@@ -15,16 +15,19 @@ The pipeline will:
 import sys
 from pathlib import Path
 
-from external.fetch    import (fetch_reserves, fetch_exchange_rate,
-                                fetch_current_account, fetch_trade_balance,
-                                fetch_external_debt, fetch_current_account_pct_gdp)
-from gdp.fetch         import fetch_gdp_growth, fetch_gdp_components, fetch_emae
-from inflation.fetch   import fetch_cpi
-from consumption.fetch   import fetch_consumption, compute_real_values
-from consumption.report  import build_productivity_report
-from financing.report    import build_financing_report
-from production.fetch    import fetch_production, fetch_agriculture
-from productivity.fetch  import fetch_employment, fetch_ucii, compute_productivity
+from external.fetch import (
+    fetch_reserves, fetch_exchange_rate,
+    fetch_current_account, fetch_trade_balance,
+    fetch_external_debt, fetch_current_account_pct_gdp,
+    fetch_gdp_growth, fetch_gdp_components, fetch_emae,
+    fetch_gdp_nominal, fetch_fbcf_breakdown,
+    fetch_cpi,
+    fetch_consumption, compute_real_values,
+    fetch_production, fetch_agriculture,
+    fetch_employment, fetch_ucii, compute_productivity,
+)
+from consumption.report import build_productivity_report
+from financing.report   import build_financing_report
 from report.build        import build_report
 from utils               import get_logger
 
@@ -80,7 +83,13 @@ def run_pipeline() -> dict:
     log.info("[2/4b] Fetching GDP expenditure components (C+I+G+X-M)...")
     components_df = fetch_gdp_components(quarters=8)
 
-    log.info("[2/4c] Fetching EMAE monthly activity (headline + sectors)...")
+    log.info("[2/4c] Fetching GDP nominal expenditure shares (current prices)...")
+    nominal_df = fetch_gdp_nominal(quarters=8)
+
+    log.info("[2/4d] Fetching FBCF investment sub-component breakdown...")
+    fbcf_df = fetch_fbcf_breakdown(quarters=12)
+
+    log.info("[2/4e] Fetching EMAE monthly activity (headline + sectors)...")
     emae_df = fetch_emae(months=24)
 
     # ------------------------------------------------------------------
@@ -142,6 +151,8 @@ def run_pipeline() -> dict:
         consumption_df=consumption_df,
         cpi_df=cpi_df,
         components_df=components_df,
+        nominal_df=nominal_df,
+        fbcf_df=fbcf_df,
         emae_df=emae_df,
         production_df=production_df,
         agro_df=agro_df,
@@ -173,6 +184,8 @@ def run_pipeline() -> dict:
         gdp_data={
             "gdp_df":        gdp_df,
             "components_df": components_df,
+            "nominal_df":    nominal_df,
+            "fbcf_df":       fbcf_df,
             "emae_df":       emae_df,
         },
         consumption_data={

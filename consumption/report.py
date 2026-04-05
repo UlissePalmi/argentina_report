@@ -28,6 +28,7 @@ from report.build import ArgentinaPDF, _safe
 from utils import CHARTS_DIR, REPORTS_DIR, get_logger
 import production.section  as prod_section
 import productivity.section as prodv_section
+from gdp.section import build_pdf_section as _gdp_section
 
 log = get_logger("consumption.report")
 
@@ -278,6 +279,8 @@ def chart_real_wages(df: pd.DataFrame) -> str | None:
 def build_productivity_report(consumption_df:  pd.DataFrame | None,
                               cpi_df:          pd.DataFrame | None = None,
                               components_df:   pd.DataFrame | None = None,
+                              nominal_df:      pd.DataFrame | None = None,
+                              fbcf_df:         pd.DataFrame | None = None,
                               emae_df:         pd.DataFrame | None = None,
                               production_df:   pd.DataFrame | None = None,
                               agro_df:         pd.DataFrame | None = None,
@@ -404,9 +407,19 @@ def build_productivity_report(consumption_df:  pd.DataFrame | None,
     )
 
     # =========================================================
-    # Section 2 — Real Wages
+    # Section 2 — GDP Expenditure Composition (delegated to gdp.section)
     # =========================================================
-    pdf.section_title("2. Real Wages (Purchasing Power)")
+    _gdp_section(pdf, {
+        "components_df":  components_df,
+        "nominal_df":     nominal_df,
+        "fbcf_df":        fbcf_df,
+        "consumption_df": consumption_df,   # enables mortgage vs construction analysis
+    })
+
+    # =========================================================
+    # Section 3 — Real Wages
+    # =========================================================
+    pdf.section_title("3. Real Wages (Purchasing Power)")
 
     pdf.body_text(
         "Nominal private-sector wage index (INDEC, base Oct 2016=100) is converted to "
@@ -422,10 +435,11 @@ def build_productivity_report(consumption_df:  pd.DataFrame | None,
                        if c in df.columns]
     if len(wage_cols_avail) > 1:
         disp = df.copy()
-        disp["date"] = disp["date"].dt.strftime("%b %Y")
         extra = ["real_wage_mom_pct"] if "real_wage_mom_pct" in disp.columns else []
         table_cols = wage_cols_avail + extra
         pct_cols = [c for c in table_cols if c != "date"]
+        disp = disp.dropna(subset=pct_cols, how="any")
+        disp["date"] = disp["date"].dt.strftime("%b %Y")
         pdf.add_table_n(
             disp, table_cols,
             fmt={c: "{:+.1f}%" for c in pct_cols},
@@ -448,12 +462,12 @@ def build_productivity_report(consumption_df:  pd.DataFrame | None,
     )
 
     # =========================================================
-    # Section 3 — Production & Output
+    # Section 4 — Production & Output
     # =========================================================
     prod_section.build_section(pdf, production_df, agro_df)
 
     # =========================================================
-    # Section 4 — Productivity & Unit Labor Costs
+    # Section 5 — Productivity & Unit Labor Costs
     # =========================================================
     prodv_section.build_section(pdf, productivity_df, ucii_df, employment_df)
 

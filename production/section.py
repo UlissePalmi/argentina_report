@@ -40,6 +40,62 @@ def _avg3(series: pd.Series) -> float | None:
     return float(vals.mean()) if len(vals) >= 1 else None
 
 
+def _align_zeros(ax1, ax2):
+    """Force both y-axes to share the same zero line."""
+    l1, u1 = ax1.get_ylim()
+    l2, u2 = ax2.get_ylim()
+    if u1 > 0 and u2 > 0:
+        r = max(abs(l1) / (u1 - l1), abs(l2) / (u2 - l2))
+        ax1.set_ylim(-r * u1 / (1 - r) if r < 1 else l1, u1)
+        ax2.set_ylim(-r * u2 / (1 - r) if r < 1 else l2, u2)
+
+
+def chart_energy_yoy_mom(df: pd.DataFrame, yoy_col: str, mom_col: str,
+                         color: str, label: str, filename: str) -> str | None:
+    """Bars for YoY, line on RHS for MoM — single energy series."""
+    if yoy_col not in df.columns:
+        return None
+    cols = [c for c in [yoy_col, mom_col] if c in df.columns]
+    sub  = df[["date"] + cols].dropna(subset=[yoy_col]).tail(24)
+    if sub.empty:
+        return None
+
+    path  = str(CHARTS_DIR / filename)
+    dates = pd.to_datetime(sub["date"])
+
+    with plt.rc_context(CHART_STYLE):
+        fig, ax = plt.subplots(figsize=(10, 4))
+        ax2 = ax.twinx()
+
+        bar_colors = [color if v >= 0 else "#c92a2a" for v in sub[yoy_col]]
+        ax.bar(dates, sub[yoy_col], width=20, color=bar_colors, alpha=0.8, label=f"{label} YoY %")
+
+        if mom_col in sub.columns:
+            ax2.plot(dates, sub[mom_col], color=color, linewidth=1.8,
+                     linestyle="--", marker="o", markersize=3, label=f"{label} MoM %")
+
+        ax.axhline(0, color="#495057", linewidth=0.8)
+        _align_zeros(ax, ax2)
+
+        ax.set_ylabel("YoY %")
+        ax2.set_ylabel("MoM %")
+        ax.set_title(f"{label} Production -- YoY % (bars) & MoM % (line)",
+                     fontsize=11, fontweight="bold", pad=8)
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
+        plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha="right", fontsize=8)
+
+        lines1, labs1 = ax.get_legend_handles_labels()
+        lines2, labs2 = ax2.get_legend_handles_labels()
+        ax.legend(lines1 + lines2, labs1 + labs2, fontsize=8, framealpha=0.8)
+        ax.grid(axis="y", alpha=0.4)
+        fig.tight_layout()
+        fig.savefig(path, dpi=150, bbox_inches="tight")
+        plt.close(fig)
+
+    log.info("Chart saved: %s", path)
+    return path
+
+
 def chart_production(production_df: pd.DataFrame, cols: list[str],
                      title: str, filename: str) -> str | None:
     """Bar chart for YoY columns, line for MoM if available."""
@@ -87,7 +143,7 @@ def build_section(pdf, production_df: pd.DataFrame | None,
     """
     from report.build import _safe
 
-    pdf.section_title("3. Production & Output")
+    pdf.section_title("4. Production & Output")
 
     if production_df is None or production_df.empty:
         pdf.body_text("Production data unavailable.")
@@ -187,38 +243,31 @@ def build_section(pdf, production_df: pd.DataFrame | None,
         "Source: Secretaria de Energia via datos.gob.ar."
     )
 
-    energy_yoy = [c for c in ["oil_yoy_pct", "gas_yoy_pct"] if c in df.columns]
-    energy_mom  = [c for c in ["oil_mom_pct", "gas_mom_pct"]  if c in df.columns]
-
-    if energy_yoy:
+    energy_cols = [c for c in ["oil_yoy_pct", "oil_mom_pct", "gas_yoy_pct", "gas_mom_pct"]
+                   if c in df.columns]
+    if energy_cols:
         disp = df.copy()
-        disp["date"] = disp["date"].dt.strftime("%b %Y")
-        rename = {c: c.replace("_yoy_pct", "").replace("_", " ") for c in energy_yoy}
+        rename = {
+            "oil_yoy_pct": "Oil YoY %", "oil_mom_pct": "Oil MoM %",
+            "gas_yoy_pct": "Gas YoY %", "gas_mom_pct": "Gas MoM %",
+        }
+        rename = {k: v for k, v in rename.items() if k in energy_cols}
         disp = disp.rename(columns=rename)
+        disp = disp.dropna(subset=list(rename.values()), how="all")
+        disp["date"] = disp["date"].dt.strftime("%b %Y")
         pdf.add_table_n(
             disp, ["date"] + list(rename.values()),
             fmt={c: "{:+.1f}%" for c in rename.values()},
-            title="Energy Production -- YoY %",
-            limit=24,
-        )
-    if energy_mom:
-        disp_m = df.copy()
-        disp_m["date"] = disp_m["date"].dt.strftime("%b %Y")
-        rename_m = {c: c.replace("_mom_pct", " MoM").replace("_", " ") for c in energy_mom}
-        disp_m = disp_m.rename(columns=rename_m)
-        pdf.add_table_n(
-            disp_m, ["date"] + list(rename_m.values()),
-            fmt={c: "{:+.1f}%" for c in rename_m.values()},
-            title="Energy Production -- MoM %",
+            title="Energy Production -- YoY % and MoM %",
             limit=24,
         )
 
-    chart_energy = chart_production(
-        df, ["oil_yoy_pct", "gas_yoy_pct"],
-        title="Oil & Gas Production -- YoY %",
-        filename="production_energy.png"
-    )
-    pdf.add_chart(chart_energy, caption="Crude oil and natural gas production YoY %")
+    chart_oil = chart_energy_yoy_mom(df, yoy_col="oil_yoy_pct", mom_col="oil_mom_pct",
+                                     color="#e67700", label="Oil", filename="production_oil.png")
+    chart_gas = chart_energy_yoy_mom(df, yoy_col="gas_yoy_pct", mom_col="gas_mom_pct",
+                                     color="#1971c2", label="Gas", filename="production_gas.png")
+    pdf.add_chart(chart_oil, caption="Crude oil production: bars=YoY %, line=MoM % (RHS)")
+    pdf.add_chart(chart_gas, caption="Natural gas production: bars=YoY %, line=MoM % (RHS)")
 
     # ---- 3c: Agriculture (annual) ----
     pdf.subsection("3c. Agricultural Harvest (Annual)")
