@@ -14,10 +14,18 @@ import requests
 # ---------------------------------------------------------------------------
 ROOT = Path(__file__).parent
 CACHE_DIR = ROOT / "cache"
-OUTPUT_DIR = ROOT / "output"
+
+DATA_DIR        = ROOT / "data"
+GDP_DIR         = DATA_DIR / "gdp"
+EXTERNAL_DIR    = DATA_DIR / "external"
+INFLATION_DIR   = DATA_DIR / "inflation"
+CONSUMPTION_DIR = DATA_DIR / "consumption"
+CHARTS_DIR      = DATA_DIR / "charts"
+REPORTS_DIR     = DATA_DIR / "reports"
 
 CACHE_DIR.mkdir(exist_ok=True)
-OUTPUT_DIR.mkdir(exist_ok=True)
+for _d in (GDP_DIR, EXTERNAL_DIR, INFLATION_DIR, CONSUMPTION_DIR, CHARTS_DIR, REPORTS_DIR):
+    _d.mkdir(parents=True, exist_ok=True)
 
 # ---------------------------------------------------------------------------
 # Logging
