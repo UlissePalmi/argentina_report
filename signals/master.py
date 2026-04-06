@@ -83,24 +83,30 @@ def compute() -> dict:
     # ENABLERS
     cpi_mom_latest   = _m("inflation", "cpi_mom_latest")
     inflation_trend  = all_signals.get("inflation", {}).get("trend", "unknown")
-    net_reserves     = _m("external", "gross_reserves_bn")  # gross; note caveat
+    gross_reserves   = _m("external", "gross_reserves_bn")
+    net_reserves     = _m("external", "net_reserves_bn")   # gross minus swap liabilities
     reserves_trend   = _m("external", "reserves_trend_6m")
     ca_latest        = _m("external", "current_account_latest_bn")
+    fiscal_pct_gdp   = _m("external", "fiscal_balance_pct_gdp")
 
     # ACCELERATORS (Vaca Muerta)
     oil_yoy          = _m("production", "oil_yoy_latest")
     gas_yoy          = _m("production", "gas_yoy_latest")
     vaca_muerta      = _m("production", "vaca_muerta_signal") or "unknown"
 
+    # For verdict, prefer net reserves; fall back to gross if net unavailable
+    reserves_for_verdict = net_reserves if net_reserves is not None else gross_reserves
+
     # --- Compute verdict ---
     verdict = _compute_verdict(
         real_wage_yoy=real_wage_yoy,
         consec_wage_pos=consec_wage_pos,
         fbcf_yoy=fbcf_yoy,
-        net_reserves=net_reserves,
+        net_reserves=reserves_for_verdict,
         ca_latest=ca_latest,
         inflation_trend=inflation_trend,
         credit_wage_spread=credit_wage_spread,
+        using_net=(net_reserves is not None),
     )
 
     # --- Collect all flags ---
@@ -111,12 +117,14 @@ def compute() -> dict:
 
     # --- Scorecard ---
     scorecard = _build_scorecard(
-        real_wage_yoy, fbcf_yoy, cpi_mom_latest, net_reserves, ca_latest,
-        formal_emp_yoy, oil_yoy
+        real_wage_yoy, fbcf_yoy, cpi_mom_latest,
+        gross_reserves, net_reserves,
+        ca_latest, formal_emp_yoy, oil_yoy, fiscal_pct_gdp,
     )
 
     # --- Summary ---
-    summary = _make_summary(verdict, real_wage_yoy, fbcf_yoy, cpi_mom_latest, net_reserves)
+    summary = _make_summary(verdict, real_wage_yoy, fbcf_yoy, cpi_mom_latest,
+                            gross_reserves, net_reserves)
 
     result = {
         "domain": "master",
@@ -147,9 +155,11 @@ def compute() -> dict:
             "inflation_mom_latest": cpi_mom_latest,
             "inflation_trend": inflation_trend,
             "disinflation_confirmed": _m("inflation", "disinflation_confirmed"),
-            "gross_reserves_bn": net_reserves,
+            "gross_reserves_bn": gross_reserves,
+            "net_reserves_bn": net_reserves,
             "reserves_trend": reserves_trend,
             "current_account_bn": ca_latest,
+            "fiscal_balance_pct_gdp": fiscal_pct_gdp,
         },
 
         "accelerators": {
@@ -168,19 +178,32 @@ def compute() -> dict:
 
 
 def _compute_verdict(real_wage_yoy, consec_wage_pos, fbcf_yoy, net_reserves,
-                     ca_latest, inflation_trend, credit_wage_spread) -> str:
+                     ca_latest, inflation_trend, credit_wage_spread,
+                     using_net: bool = False) -> str:
     """
     Returns one of the five verdict levels from the Blueprint.
+
+    net_reserves: if using_net=True, thresholds are for true net reserves
+      (blueprint: green >$5B, yellow $0-5B, red <$0).
+      If using_net=False (gross), apply legacy gross thresholds.
     """
-    w = real_wage_yoy or 0
-    f = fbcf_yoy or 0
-    r = net_reserves or 0
+    w  = real_wage_yoy or 0
+    f  = fbcf_yoy or 0
+    r  = net_reserves or 0
     ca = ca_latest or 0
 
-    # CRISIS RISK: wages negative + investment falling + reserves depleting
-    if w < -5 and f < 0 and r < 20:
+    # Crisis thresholds differ: net reserves can be negative by design
+    if using_net:
+        crisis_reserves = r < -5   # net < -$5B = externally constrained
+        danger_reserves = r < 0
+    else:
+        crisis_reserves = r < 20   # gross < $20B = thin
+        danger_reserves = r < 25
+
+    # CRISIS RISK
+    if w < -5 and f < 0 and crisis_reserves:
         return "crisis_risk"
-    if ca < -5 and r < 15:
+    if ca < -5 and danger_reserves:
         return "crisis_risk"
 
     # FRAGILE RECOVERY: wages positive but credit-driven + investment weak
@@ -192,11 +215,10 @@ def _compute_verdict(real_wage_yoy, consec_wage_pos, fbcf_yoy, net_reserves,
         return "recovery_confirmed_watch_sustainability"
 
     # SUSTAINABLE GROWTH: all levels positive and self-reinforcing
-    if w > 5 and consec_wage_pos >= 12 and f > 10 and (net_reserves or 0) > 10:
+    sus_reserves = (r > 5) if using_net else (r > 30)
+    if w > 5 and consec_wage_pos >= 12 and f > 10 and sus_reserves:
         return "sustainable_growth"
 
-    # Default: structural improvement underway but not yet confirmed
-    # (Enablers fixed, drivers building, master variable not yet sustained)
     return "structural_improvement_underway_unconfirmed"
 
 
@@ -223,7 +245,8 @@ def _credit_discipline(spread) -> str:
     return "warning"
 
 
-def _build_scorecard(wage, fbcf, cpi_mom, reserves, ca, emp, oil) -> dict:
+def _build_scorecard(wage, fbcf, cpi_mom, gross_res, net_res,
+                     ca, emp, oil, fiscal) -> dict:
     def _traffic(value, green_fn, yellow_fn) -> str:
         if value is None:
             return "grey"
@@ -232,6 +255,22 @@ def _build_scorecard(wage, fbcf, cpi_mom, reserves, ca, emp, oil) -> dict:
         if yellow_fn(value):
             return "yellow"
         return "red"
+
+    # Net reserves row: use net if available, else gross with adjusted thresholds
+    if net_res is not None:
+        res_label    = "Net Reserves (est., $B)"
+        res_value    = net_res
+        res_signal   = _traffic(net_res, lambda v: v > 5, lambda v: v >= 0)
+        res_green    = "> $5B"
+        res_yellow   = "$0-5B"
+        res_red      = "< $0B (negative)"
+    else:
+        res_label    = "Gross Reserves ($B)"
+        res_value    = gross_res
+        res_signal   = _traffic(gross_res, lambda v: v > 30, lambda v: v > 20)
+        res_green    = "> $30B"
+        res_yellow   = "$20-30B"
+        res_red      = "< $20B"
 
     return {
         "Master Variable (real wages YoY)": {
@@ -249,11 +288,10 @@ def _build_scorecard(wage, fbcf, cpi_mom, reserves, ca, emp, oil) -> dict:
             "signal": _traffic(cpi_mom, lambda v: v < 2, lambda v: v < 4),
             "green": "< 2%", "yellow": "2-4%", "red": "> 4%",
         },
-        "Gross Reserves ($B)": {
-            "value": reserves,
-            "signal": _traffic(reserves, lambda v: v > 30, lambda v: v > 20),
-            "green": "> $30B", "yellow": "$20-30B", "red": "< $20B",
-            "note": "Gross only — net reserves materially lower",
+        res_label: {
+            "value": res_value,
+            "signal": res_signal,
+            "green": res_green, "yellow": res_yellow, "red": res_red,
         },
         "Current Account (quarterly $B)": {
             "value": ca,
@@ -270,6 +308,11 @@ def _build_scorecard(wage, fbcf, cpi_mom, reserves, ca, emp, oil) -> dict:
             "signal": _traffic(oil, lambda v: v > 10, lambda v: v >= 0),
             "green": "> 10%", "yellow": "0-10%", "red": "< 0%",
         },
+        "Fiscal Balance (% GDP)": {
+            "value": fiscal,
+            "signal": _traffic(fiscal, lambda v: v > 1.5, lambda v: v >= 0),
+            "green": "> 1.5% surplus", "yellow": "0-1.5%", "red": "< 0% deficit",
+        },
     }
 
 
@@ -282,7 +325,8 @@ def _latest_date(signals: dict) -> str | None:
     return max(dates) if dates else None
 
 
-def _make_summary(verdict, wage, fbcf, cpi, reserves) -> str:
+def _make_summary(verdict, wage, fbcf, cpi, gross, net) -> str:
+    reserves = net if net is not None else gross
     verdict_labels = {
         "crisis_risk": "CRISIS RISK",
         "fragile_recovery": "FRAGILE RECOVERY",
@@ -301,7 +345,8 @@ def _make_summary(verdict, wage, fbcf, cpi, reserves) -> str:
     if cpi is not None:
         parts.append(f"CPI {cpi:.1f}%/month")
     if reserves is not None:
-        parts.append(f"gross reserves ${reserves:.1f}B")
+        label = "net reserves (est.)" if net is not None else "gross reserves"
+        parts.append(f"{label} ${reserves:.1f}B")
     return "; ".join(parts) + "."
 
 

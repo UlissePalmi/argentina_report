@@ -8,6 +8,7 @@ Full detail is in consumption/report.py -> data/reports/consumption_report.pdf.
 import pandas as pd
 
 from utils import get_logger
+from report.signal_text import load_signal, render_signal_callout, render_signal_callout_md
 
 log = get_logger("consumption.section")
 
@@ -110,6 +111,10 @@ def build_pdf_section(pdf, data: dict) -> None:
     )
     pdf.body_text(note)
 
+    # Credit signal: sustainability verdict + credit-wage spread
+    render_signal_callout(pdf, load_signal("credit"), label="Credit & Sustainability",
+                          show_positive=True, max_flags=3)
+
 
 def build_md_section(data: dict) -> str:
     consumption_df = data.get("consumption_df")
@@ -149,6 +154,9 @@ def build_md_section(data: dict) -> str:
             "*Nominal figures (CPI unavailable for adjustment). "
             "Full detail: `data/reports/consumption_report.pdf`*")
 
+    sig_block = render_signal_callout_md(load_signal("credit"), label="Credit & Sustainability",
+                                        show_positive=True, max_flags=3)
+
     return f"""## 4. Consumption Drivers
 
 ```
@@ -159,4 +167,6 @@ def build_md_section(data: dict) -> str:
 
 {table}
 
-{note}"""
+{note}
+
+{sig_block}"""

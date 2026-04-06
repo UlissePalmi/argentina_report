@@ -28,6 +28,7 @@ from external.fetch import (
     fetch_reserves, fetch_exchange_rate,
     fetch_current_account, fetch_trade_balance,
     fetch_external_debt, fetch_current_account_pct_gdp,
+    fetch_fiscal,
     fetch_gdp_growth, fetch_gdp_components, fetch_emae,
     fetch_gdp_nominal, fetch_fbcf_breakdown,
     fetch_cpi,
@@ -80,6 +81,11 @@ def run_pipeline() -> dict:
     ext_debt_df = fetch_external_debt(years=8)
     if ext_debt_df is None:
         warnings.append("World Bank external debt: FAILED (non-critical)")
+
+    log.info("[1/4f] Fetching fiscal balance...")
+    fiscal_df = fetch_fiscal(years=6)
+    if fiscal_df is None:
+        warnings.append("Fiscal balance: FAILED (non-critical -- scorecard will show n/a)")
 
     # ------------------------------------------------------------------
     # GDP
@@ -218,6 +224,10 @@ def run_pipeline() -> dict:
             "consumption_df": consumption_df,
             "employment_df":  employment_df,
         },
+        production_data={
+            "production_df": production_df,
+            "agro_df":       agro_df,
+        },
         consumption_data={
             "consumption_df": consumption_df,
         },
@@ -235,8 +245,9 @@ def run_pipeline() -> dict:
 
     all_dfs = {
         "reserves": reserves_df, "fx": fx_df, "ca": ca_df, "trade": trade_df,
-        "ext_debt": ext_debt_df, "gdp": gdp_df, "components": components_df,
-        "emae": emae_df, "cpi": cpi_df, "consumption": consumption_df,
+        "ext_debt": ext_debt_df, "fiscal": fiscal_df, "gdp": gdp_df,
+        "components": components_df, "emae": emae_df, "cpi": cpi_df,
+        "consumption": consumption_df,
     }
     succeeded = [k for k, v in all_dfs.items() if v is not None]
     failed    = [k for k, v in all_dfs.items() if v is None]

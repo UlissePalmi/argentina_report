@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 
 from utils import CHARTS_DIR, get_logger
+from report.signal_text import load_signal, render_signal_callout, render_signal_callout_md
 
 log = get_logger("external.section")
 
@@ -166,6 +167,8 @@ def build_pdf_section(pdf, data: dict) -> None:
     pdf.add_chart(trade_chart_path,    "Figure 1: Exports vs Imports (USD billions)")
     pdf.add_chart(reserves_chart_path, "Figure 2: Gross International Reserves (USD billions)")
 
+    render_signal_callout(pdf, load_signal("external"), label="Dollar Situation")
+
 
 def build_md_section(data: dict) -> str:
     """Return the markdown string for the Dollar Situation section."""
@@ -212,10 +215,13 @@ def build_md_section(data: dict) -> str:
     def _img(p):
         return f"![chart](data/charts/{Path(p).name})\n" if p and Path(p).exists() else "_Chart unavailable._\n"
 
+    sig_block = render_signal_callout_md(load_signal("external"), label="Dollar Situation")
+
     return f"""## 1. Dollar Situation
 
 {summarise(data)}
 {ca_table}
 {trade_table}
 
-{_img(trade_chart_path)}{_img(reserves_chart_path)}"""
+{_img(trade_chart_path)}{_img(reserves_chart_path)}
+{sig_block}"""

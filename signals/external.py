@@ -25,44 +25,85 @@ def compute() -> dict:
     ca_df       = _read_csv("imf_current_account.csv")
     trade_df    = _read_csv("indec_trade.csv")
     fx_df       = _read_csv("bcra_fx.csv")
+    fiscal_df   = _read_csv("fiscal_balance.csv")
 
     metrics = {}
     flags   = []
 
     # ------------------------------------------------------------------
-    # Reserves (gross — net requires external calculation)
+    # Reserves — gross and net
     # ------------------------------------------------------------------
     as_of = None
-    reserves_latest    = None
+    gross_latest       = None
+    net_latest         = None
     reserves_trend_6m  = None
     reserves_change_6m = None
 
     if reserves_df is not None and "reserves_usd_bn" in reserves_df.columns:
         rv = reserves_df["reserves_usd_bn"].dropna()
         if not rv.empty:
-            reserves_latest = round(float(rv.iloc[-1]), 2)
+            gross_latest = round(float(rv.iloc[-1]), 2)
             as_of = str(reserves_df["date"].dropna().iloc[-1])[:10]
             if len(rv) >= 6:
                 reserves_change_6m = round(float(rv.iloc[-1]) - float(rv.iloc[-6]), 2)
                 reserves_trend_6m  = "improving" if reserves_change_6m > 0 else "deteriorating"
 
-    metrics["gross_reserves_bn"]   = reserves_latest
+    if reserves_df is not None and "net_reserves_usd_bn" in reserves_df.columns:
+        nv = reserves_df["net_reserves_usd_bn"].dropna()
+        if not nv.empty:
+            net_latest = round(float(nv.iloc[-1]), 2)
+
+    metrics["gross_reserves_bn"]   = gross_latest
+    metrics["net_reserves_bn"]     = net_latest
     metrics["reserves_change_6m"]  = reserves_change_6m
     metrics["reserves_trend_6m"]   = reserves_trend_6m
 
-    # Flag reserves
-    if reserves_latest is not None:
-        if reserves_latest > 35:
-            flags.append(f"POSITIVE: Gross reserves ${reserves_latest:.1f}B — adequate buffer")
-        elif reserves_latest > 25:
-            flags.append(f"NOTE: Gross reserves ${reserves_latest:.1f}B — moderate; net reserves materially lower")
+    # Flag net reserves (blueprint thresholds: green >$5B, yellow $0-5B, red <$0)
+    if net_latest is not None:
+        if net_latest > 5:
+            flags.append(f"POSITIVE: Net reserves ${net_latest:.1f}B — positive and above $5B threshold")
+        elif net_latest >= 0:
+            flags.append(f"WARNING: Net reserves ${net_latest:.1f}B — positive but thin; below $5B safety threshold")
         else:
-            flags.append(f"WARNING: Gross reserves ${reserves_latest:.1f}B — thin; watch net reserves closely")
+            flags.append(f"CRITICAL: Net reserves negative at ${net_latest:.1f}B — external constraint active")
         if reserves_change_6m is not None:
             if reserves_change_6m > 3:
-                flags.append(f"POSITIVE: Reserves +${reserves_change_6m:.1f}B over 6 months — accumulation underway")
+                flags.append(f"POSITIVE: Gross reserves +${reserves_change_6m:.1f}B over 6 months — accumulation underway")
             elif reserves_change_6m < -3:
-                flags.append(f"WARNING: Reserves -${abs(reserves_change_6m):.1f}B over 6 months — depletion signal")
+                flags.append(f"WARNING: Gross reserves -${abs(reserves_change_6m):.1f}B over 6 months — depletion signal")
+    elif gross_latest is not None:
+        if gross_latest < 25:
+            flags.append(f"WARNING: Gross reserves ${gross_latest:.1f}B — thin; net reserves likely negative")
+
+    # ------------------------------------------------------------------
+    # Fiscal balance
+    # ------------------------------------------------------------------
+    fiscal_pct_gdp = None
+    fiscal_as_of   = None
+    fiscal_label   = None
+
+    if fiscal_df is not None:
+        # Find the best available % GDP column
+        pct_col = next((c for c in ["fiscal_primary_pct_gdp", "fiscal_balance_pct_gdp"]
+                        if c in fiscal_df.columns), None)
+        if pct_col:
+            fv = fiscal_df[["date", pct_col]].dropna(subset=[pct_col])
+            if not fv.empty:
+                fiscal_pct_gdp = round(float(fv[pct_col].iloc[-1]), 2)
+                fiscal_as_of   = str(fv["date"].iloc[-1])[:10]
+                fiscal_label   = "primary" if "primary" in pct_col else "overall"
+
+    metrics["fiscal_balance_pct_gdp"] = fiscal_pct_gdp
+    metrics["fiscal_balance_as_of"]   = fiscal_as_of
+    metrics["fiscal_balance_label"]   = fiscal_label
+
+    if fiscal_pct_gdp is not None:
+        if fiscal_pct_gdp > 1.5:
+            flags.append(f"POSITIVE: Fiscal {fiscal_label} surplus {fiscal_pct_gdp:+.1f}% GDP — removes crisis risk")
+        elif fiscal_pct_gdp >= 0:
+            flags.append(f"NOTE: Fiscal {fiscal_label} balance {fiscal_pct_gdp:+.1f}% GDP — balanced but thin margin")
+        else:
+            flags.append(f"WARNING: Fiscal {fiscal_label} deficit {fiscal_pct_gdp:+.1f}% GDP — fiscal pressure present")
 
     # ------------------------------------------------------------------
     # Current account
@@ -169,18 +210,18 @@ def compute() -> dict:
     # ------------------------------------------------------------------
     # Overall assessment
     # ------------------------------------------------------------------
-    overall = _overall_assessment(reserves_latest, reserves_change_6m, ca_latest, ca_trend)
+    overall = _overall_assessment(net_latest or gross_latest, reserves_change_6m, ca_latest, ca_trend)
     trend   = _overall_trend(reserves_trend_6m, ca_trend)
 
     result = {
         "domain": "external",
         "as_of_date": as_of,
-        "data_quality": "good" if reserves_latest is not None else "partial",
+        "data_quality": "good" if gross_latest is not None else "partial",
         "metrics": metrics,
         "flags": flags,
         "trend": trend,
-        "connection_to_master_variable": _connection(reserves_latest, reserves_change_6m, ca_latest),
-        "summary": _make_summary(reserves_latest, ca_latest, trade_surplus_latest, trend),
+        "connection_to_master_variable": _connection(net_latest or gross_latest, reserves_change_6m, ca_latest),
+        "summary": _make_summary(gross_latest, net_latest, ca_latest, trade_surplus_latest, trend),
     }
 
     _save(result)
@@ -188,9 +229,10 @@ def compute() -> dict:
 
 
 def _overall_assessment(res, res_chg, ca, ca_trend) -> str:
+    """res = net reserves (or gross as fallback); thresholds match blueprint net reserve scale."""
     if res is None:
         return "unknown"
-    if (res or 0) < 20 and (res_chg or 0) < 0 and (ca or 0) < -3:
+    if (res or 0) < 0 and (res_chg or 0) < 0 and (ca or 0) < -3:
         return "crisis_risk"
     if (ca or 0) > 0 and (res_chg or 0) > 0:
         return "improving"
@@ -212,18 +254,20 @@ def _overall_trend(res_trend, ca_trend) -> str:
     return "mixed"
 
 
-def _connection(res, res_chg, ca) -> str:
+def _connection(net_res, res_chg, ca) -> str:
+    """net_res = net reserves in $B (negative = constraint active)."""
     if (ca or 0) > 0 and (res_chg or 0) > 0:
         return "positive"
-    if (ca or 0) < -3 or (res or 0) < 20:
+    if (ca or 0) < -3 or (net_res or 0) < 0:
         return "negative"
     return "neutral"
 
 
-def _make_summary(reserves, ca, trade, trend) -> str:
+def _make_summary(gross, net, ca, trade, trend) -> str:
     parts = []
-    if reserves is not None:
-        parts.append(f"Gross reserves ${reserves:.1f}B")
+    if gross is not None:
+        net_str = f" (net est. ${net:.1f}B)" if net is not None else ""
+        parts.append(f"Gross reserves ${gross:.1f}B{net_str}")
     if ca is not None:
         direction = "surplus" if ca > 0 else "deficit"
         parts.append(f"CA {direction} ${abs(ca):.1f}B/quarter")

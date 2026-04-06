@@ -10,6 +10,7 @@ import matplotlib.dates as mdates
 import pandas as pd
 
 from utils import CHARTS_DIR, get_logger
+from report.signal_text import load_signal, render_signal_callout, render_signal_callout_md
 
 log = get_logger("gdp.section")
 
@@ -380,6 +381,9 @@ def build_pdf_section(pdf, data: dict) -> None:
         if analysis:
             pdf.body_text(analysis)
 
+    render_signal_callout(pdf, load_signal("investment"), label="FBCF Investment",
+                          show_positive=True, max_flags=4)
+
     if emae_df is not None and not emae_df.empty:
         emae_display = emae_df.tail(12).copy()
         emae_display["date"] = pd.to_datetime(emae_display["date"]).dt.strftime("%b %Y")
@@ -457,6 +461,9 @@ def build_md_section(data: dict) -> str:
                              fmt={c: "{:.1f}%" for c in share_cols + yoy_cols})
         analysis = _fbcf_analytical_text(fbcf_df, consumption_df)
         out += f"\n\n{analysis}"
+
+    out += "\n\n" + render_signal_callout_md(load_signal("investment"),
+                                             label="FBCF Investment", show_positive=True, max_flags=4)
 
     if emae_df is not None and not emae_df.empty:
         emae_disp = emae_df.tail(12).copy()

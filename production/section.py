@@ -10,6 +10,7 @@ import matplotlib.dates as mdates
 import pandas as pd
 
 from utils import CHARTS_DIR, get_logger
+from report.signal_text import load_signal, render_signal_callout, render_signal_callout_md
 
 log = get_logger("production.section")
 
@@ -307,3 +308,146 @@ def build_section(pdf, production_df: pd.DataFrame | None,
         "Oil: 363.3_PRODUCCIONUDO__28. Gas: 364.3_PRODUCCIoNRAL__25. "
         "Agriculture: AGRO_A_Soja/Maiz/Trigo_0003 (Ministerio de Agricultura, annual)."
     )
+
+
+# ---------------------------------------------------------------------------
+# Standard section-builder interface (used by report/build.py)
+# ---------------------------------------------------------------------------
+
+def _summarise(production_df: pd.DataFrame) -> str:
+    """One-paragraph key findings for the main report."""
+    if production_df is None or production_df.empty:
+        return "Production data unavailable."
+
+    df = production_df.copy()
+    commodity_cols = [c for c in ["oil_yoy_pct", "gas_yoy_pct"] if c in df.columns]
+    domestic_cols  = [c for c in ["ipi_yoy_pct", "isac_cement_yoy_pct"] if c in df.columns]
+
+    comm_avg = (sum(_avg3(df[c]) or 0 for c in commodity_cols) / len(commodity_cols)
+                if commodity_cols else None)
+    dom_avg  = (sum(_avg3(df[c]) or 0 for c in domestic_cols) / len(domestic_cols)
+                if domestic_cols else None)
+
+    oil  = _avg3(df["oil_yoy_pct"])  if "oil_yoy_pct"  in df.columns else None
+    gas  = _avg3(df["gas_yoy_pct"])  if "gas_yoy_pct"  in df.columns else None
+    ipi  = _avg3(df["ipi_yoy_pct"])  if "ipi_yoy_pct"  in df.columns else None
+
+    parts = []
+    if comm_avg is not None and dom_avg is not None:
+        if comm_avg > 5 and dom_avg < -5:
+            parts.append(
+                f"Two-speed economy: commodity production ({_pct(comm_avg)} avg, 3m) "
+                f"is expanding while domestic manufacturing ({_pct(dom_avg)} avg) contracts."
+            )
+        elif comm_avg > 0 and dom_avg > 0:
+            parts.append(
+                f"Broad-based production growth: commodity ({_pct(comm_avg)}) and "
+                f"domestic ({_pct(dom_avg)}) sectors both expanding (3-month avg)."
+            )
+        else:
+            parts.append(
+                f"Mixed signals: commodity production {_pct(comm_avg)}, "
+                f"domestic production {_pct(dom_avg)} (3-month avg)."
+            )
+    if oil is not None:
+        parts.append(f"Oil production: {_pct(oil)} YoY (3m avg).")
+    if gas is not None:
+        parts.append(f"Natural gas: {_pct(gas)} YoY (3m avg).")
+    if ipi is not None:
+        parts.append(f"IPI manufacturing: {_pct(ipi)} YoY (3m avg).")
+    parts.append("Full detail in data/reports/productivity_report.pdf.")
+    return "  ".join(parts)
+
+
+def build_pdf_section(pdf, data: dict) -> None:
+    production_df = data.get("production_df")
+    agro_df       = data.get("agro_df")
+
+    pdf.section_title("5. Production & Energy")
+    pdf.body_text(_summarise(production_df))
+
+    if production_df is not None and not production_df.empty:
+        df = production_df.copy()
+        df["date"] = pd.to_datetime(df["date"])
+
+        # Compact 6-month summary table: IPI + oil + gas YoY
+        key_cols = [c for c in ["ipi_yoy_pct", "oil_yoy_pct", "gas_yoy_pct",
+                                  "isac_cement_yoy_pct"] if c in df.columns]
+        if key_cols:
+            disp = df.copy()
+            disp["date"] = disp["date"].dt.strftime("%b %Y")
+            rename = {c: c.replace("_yoy_pct", "").replace("_", " ").title()
+                      for c in key_cols}
+            disp = disp.rename(columns=rename)
+            pdf.add_table_n(
+                disp, ["date"] + list(rename.values()),
+                fmt={v: "{:+.1f}%" for v in rename.values()},
+                title="Production Indicators -- YoY % (last 6 months)",
+                limit=6,
+            )
+
+        # IPI chart (manufacturing)
+        ipi_chart = chart_production(
+            df, ["ipi_yoy_pct", "ipi_food_yoy_pct", "ipi_steel_yoy_pct"],
+            title="IPI Manufacturing -- YoY % by Subsector",
+            filename="production_ipi.png"
+        )
+        pdf.add_chart(ipi_chart, caption="IPI: headline + food & beverages + steel (YoY %)")
+
+        # Oil chart (Vaca Muerta signal)
+        oil_chart = chart_energy_yoy_mom(
+            df, yoy_col="oil_yoy_pct", mom_col="oil_mom_pct",
+            color="#e67700", label="Oil", filename="production_oil.png"
+        )
+        pdf.add_chart(oil_chart, caption="Crude oil production -- bars=YoY %, line=MoM % (RHS)")
+
+    render_signal_callout(pdf, load_signal("production"), label="Production & Vaca Muerta",
+                          show_positive=True, max_flags=4)
+
+
+def build_md_section(data: dict) -> str:
+    production_df = data.get("production_df")
+
+    if production_df is None or production_df.empty:
+        return "## 5. Production & Energy\n\nProduction data unavailable.\n"
+
+    df = production_df.copy()
+    df["date"] = pd.to_datetime(df["date"])
+
+    key_cols = [c for c in ["ipi_yoy_pct", "oil_yoy_pct", "gas_yoy_pct",
+                              "isac_cement_yoy_pct"] if c in df.columns]
+    table = ""
+    if key_cols:
+        rename = {c: c.replace("_yoy_pct", "").replace("_", " ").title() for c in key_cols}
+        disp = df.tail(6).copy()
+        disp["date"] = disp["date"].dt.strftime("%b %Y")
+        disp = disp.rename(columns=rename)
+        cols = ["date"] + list(rename.values())
+        header = "| " + " | ".join(cols) + " |"
+        sep    = "| " + " | ".join(["---"] * len(cols)) + " |"
+        rows = []
+        for _, row in disp[cols].iterrows():
+            cells = []
+            for c in cols:
+                v = row[c]
+                if c == "date":
+                    cells.append(str(v))
+                else:
+                    try:    cells.append(f"{float(v):+.1f}%")
+                    except: cells.append(str(v))
+            rows.append("| " + " | ".join(cells) + " |")
+        table = "\n**Production Indicators -- YoY % (last 6 months)**\n\n" + \
+                "\n".join([header, sep] + rows)
+
+    sig_block = render_signal_callout_md(load_signal("production"),
+                                         label="Production & Vaca Muerta",
+                                         show_positive=True, max_flags=4)
+
+    return f"""## 5. Production & Energy
+
+{_summarise(production_df)}
+{table}
+
+*Full detail: `data/reports/productivity_report.pdf`*
+
+{sig_block}"""

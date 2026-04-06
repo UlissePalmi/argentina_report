@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 
 from utils import CHARTS_DIR, get_logger
+from report.signal_text import load_signal, render_signal_callout, render_signal_callout_md
 
 log = get_logger("inflation.section")
 
@@ -112,6 +113,8 @@ def build_pdf_section(pdf, data: dict) -> None:
 
     pdf.add_chart(inf_chart_path, "Figure 3: Monthly and Annual CPI Inflation (%)")
 
+    render_signal_callout(pdf, load_signal("inflation"), label="Inflation")
+
 
 def build_md_section(data: dict) -> str:
     cpi_df = data.get("cpi_df")
@@ -147,9 +150,12 @@ def build_md_section(data: dict) -> str:
     def _img(p):
         return f"![chart](data/charts/{Path(p).name})\n" if p and Path(p).exists() else "_Chart unavailable._\n"
 
+    sig_block = render_signal_callout_md(load_signal("inflation"), label="Inflation")
+
     return f"""## 2. Inflation
 
 {summarise(data)}
 {cpi_table}
 
-{_img(chart_path)}"""
+{_img(chart_path)}
+{sig_block}"""
