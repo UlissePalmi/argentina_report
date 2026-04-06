@@ -22,12 +22,13 @@ INFLATION_DIR    = DATA_DIR / "inflation"
 CONSUMPTION_DIR  = DATA_DIR / "consumption"
 PRODUCTION_DIR   = DATA_DIR / "production"
 PRODUCTIVITY_DIR = DATA_DIR / "productivity"
+SIGNALS_DIR      = DATA_DIR / "signals"
 CHARTS_DIR       = DATA_DIR / "charts"
 REPORTS_DIR      = DATA_DIR / "reports"
 
 CACHE_DIR.mkdir(exist_ok=True)
 for _d in (GDP_DIR, EXTERNAL_DIR, INFLATION_DIR, CONSUMPTION_DIR,
-           PRODUCTION_DIR, PRODUCTIVITY_DIR, CHARTS_DIR, REPORTS_DIR):
+           PRODUCTION_DIR, PRODUCTIVITY_DIR, SIGNALS_DIR, CHARTS_DIR, REPORTS_DIR):
     _d.mkdir(parents=True, exist_ok=True)
 
 # ---------------------------------------------------------------------------

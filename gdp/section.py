@@ -51,106 +51,69 @@ def _pct(v) -> str:
         return "n/a"
 
 
-def chart_gdp_nominal(nominal_df: pd.DataFrame,
-                      filename: str = "gdp_composition_nominal.png") -> str | None:
-    """Stacked area (C, G, I) + line (NX) — nominal shares % of GDP."""
+def chart_gdp_composition_pie(nominal_df: pd.DataFrame,
+                              filename: str = "gdp_composition_pie.png") -> str | None:
+    """Pie chart of C, G, I, NX shares using the most recent quarter's nominal data."""
     cols = ["C_share_nom", "G_share_nom", "I_share_nom", "NX_share_nom"]
     avail = [c for c in cols if c in nominal_df.columns]
     if not avail:
         return None
-    sub = nominal_df[["date"] + avail].dropna(subset=avail, how="all").copy()
+    sub = nominal_df[["quarter"] + avail].dropna(subset=avail, how="all")
     if sub.empty:
         return None
 
-    sub["date"] = pd.PeriodIndex(sub["date"], freq="Q").to_timestamp()
+    last = sub.iloc[-1]
+    quarter_label = _fmt_quarter(last["quarter"])
+
+    labels_map = {
+        "C_share_nom": "C — Private consumption",
+        "G_share_nom": "G — Government",
+        "I_share_nom": "I — Investment (FBCF)",
+        "NX_share_nom": "NX — Net exports",
+    }
+    colors_map = {
+        "C_share_nom": "#1971c2",
+        "G_share_nom": "#e67700",
+        "I_share_nom": "#2f9e44",
+        "NX_share_nom": "#c92a2a",
+    }
+
+    # NX can be negative — split into positive (pie slice) and show deficit separately
+    pie_cols = [c for c in avail if float(last[c]) > 0]
+    pie_vals = [float(last[c]) for c in pie_cols]
+    pie_labels = [f"{labels_map[c]}\n{last[c]:.1f}%" for c in pie_cols]
+    pie_colors = [colors_map[c] for c in pie_cols]
+
     path = str(CHARTS_DIR / filename)
-
-    colors = {"C_share_nom": "#1971c2", "G_share_nom": "#e67700",
-              "I_share_nom": "#2f9e44", "NX_share_nom": "#c92a2a"}
-    labels = {"C_share_nom": "C — Private consumption",
-              "G_share_nom": "G — Government",
-              "I_share_nom": "I — Investment (FBCF)",
-              "NX_share_nom": "NX — Net exports"}
-
     with plt.rc_context(CHART_STYLE):
-        fig, ax = plt.subplots(figsize=(11, 5))
-        dates = sub["date"].values
-        stack_cols = [c for c in ["C_share_nom", "G_share_nom", "I_share_nom"] if c in avail]
-        bottom = None
-        for col in stack_cols:
-            vals = sub[col].values
-            if bottom is None:
-                ax.fill_between(dates, vals, alpha=0.55, color=colors[col], label=labels[col])
-                bottom = vals.copy()
-            else:
-                ax.fill_between(dates, bottom, bottom + vals, alpha=0.55,
-                                color=colors[col], label=labels[col])
-                bottom = bottom + vals
-        if "NX_share_nom" in avail:
-            ax.plot(dates, sub["NX_share_nom"].values, color=colors["NX_share_nom"],
-                    linewidth=2.2, marker="o", markersize=4, label=labels["NX_share_nom"])
-            ax.axhline(0, color="#495057", linewidth=0.6, linestyle="--")
-        ax.set_ylabel("% of GDP (current prices)")
-        ax.set_title("GDP Expenditure Composition -- % of GDP (current prices)",
-                     fontsize=11, fontweight="bold", pad=8)
-        ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
-        plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha="right", fontsize=8)
-        ax.legend(fontsize=8, framealpha=0.9, loc="upper left")
-        ax.grid(axis="y", alpha=0.4)
-        fig.tight_layout()
-        fig.savefig(path, dpi=150, bbox_inches="tight")
-        plt.close(fig)
+        fig, ax = plt.subplots(figsize=(7, 7))
+        wedges, texts, autotexts = ax.pie(
+            pie_vals,
+            labels=pie_labels,
+            colors=pie_colors,
+            autopct="%1.1f%%",
+            startangle=90,
+            pctdistance=0.75,
+            wedgeprops={"linewidth": 0.8, "edgecolor": "white"},
+        )
+        for t in texts:
+            t.set_fontsize(9)
+        for at in autotexts:
+            at.set_fontsize(8)
+            at.set_color("white")
+            at.set_fontweight("bold")
 
-    log.info("Chart saved: %s", path)
-    return path
+        # Annotate negative NX outside the pie
+        neg_cols = [c for c in avail if float(last[c]) <= 0]
+        if neg_cols:
+            note = "  |  ".join(
+                f"{labels_map[c].split(' — ')[0]}: {last[c]:.1f}%" for c in neg_cols
+            )
+            ax.text(0, -1.35, note, ha="center", va="center", fontsize=8,
+                    color=colors_map[neg_cols[0]])
 
-
-def chart_gdp_composition(components_df: pd.DataFrame,
-                          filename: str = "gdp_composition.png") -> str | None:
-    """Stacked area (C, G, I) + line (NX) — real (constant 2004 price) shares."""
-    cols = ["C_share_real", "G_share_real", "I_share_real", "NX_share_real"]
-    avail = [c for c in cols if c in components_df.columns]
-    if not avail:
-        return None
-    sub = components_df[["date"] + avail].dropna(subset=avail, how="all").copy()
-    if sub.empty:
-        return None
-
-    sub["date"] = pd.PeriodIndex(sub["date"], freq="Q").to_timestamp()
-    path = str(CHARTS_DIR / filename)
-
-    colors = {"C_share_real": "#1971c2", "G_share_real": "#e67700",
-              "I_share_real": "#2f9e44", "NX_share_real": "#c92a2a"}
-    labels = {"C_share_real": "C — Private consumption",
-              "G_share_real": "G — Government",
-              "I_share_real": "I — Investment (FBCF)",
-              "NX_share_real": "NX — Net exports"}
-
-    with plt.rc_context(CHART_STYLE):
-        fig, ax = plt.subplots(figsize=(11, 5))
-        dates = sub["date"].values
-        stack_cols = [c for c in ["C_share_real", "G_share_real", "I_share_real"] if c in avail]
-        bottom = None
-        for col in stack_cols:
-            vals = sub[col].values
-            if bottom is None:
-                ax.fill_between(dates, vals, alpha=0.55, color=colors[col], label=labels[col])
-                bottom = vals.copy()
-            else:
-                ax.fill_between(dates, bottom, bottom + vals, alpha=0.55,
-                                color=colors[col], label=labels[col])
-                bottom = bottom + vals
-        if "NX_share_real" in avail:
-            ax.plot(dates, sub["NX_share_real"].values, color=colors["NX_share_real"],
-                    linewidth=2.2, marker="o", markersize=4, label=labels["NX_share_real"])
-            ax.axhline(0, color="#495057", linewidth=0.6, linestyle="--")
-        ax.set_ylabel("% of GDP (constant 2004 prices)")
-        ax.set_title("GDP Expenditure Composition -- % of GDP (constant 2004 prices)",
-                     fontsize=11, fontweight="bold", pad=8)
-        ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
-        plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha="right", fontsize=8)
-        ax.legend(fontsize=8, framealpha=0.9, loc="upper left")
-        ax.grid(axis="y", alpha=0.4)
+        ax.set_title(f"GDP Expenditure Composition -- {quarter_label} (current prices)",
+                     fontsize=11, fontweight="bold", pad=12)
         fig.tight_layout()
         fig.savefig(path, dpi=150, bbox_inches="tight")
         plt.close(fig)
@@ -355,64 +318,29 @@ def build_pdf_section(pdf, data: dict) -> None:
             title="GDP Expenditure Components -- YoY Growth (C, G, I, X, M, GDP)"
         )
 
-    # ---- GDP composition (nominal shares — primary) ----
+    # ---- GDP composition (nominal shares — pie, latest quarter) ----
     pdf.section_title("3b. GDP Composition: C + G + I + NX as % of GDP")
 
     if nominal_df is not None and not nominal_df.empty:
-        pdf.body_text(
-            "Component shares of GDP at CURRENT PRICES (nominal pesos). "
-            "I = sum of 4 FBCF sub-components (construction, domestic/imported machinery, transport). "
-            "C = private consumption, G = government consumption, NX = net exports (X - M)."
-        )
         nom_share_cols = [c for c in ["C_share_nom", "G_share_nom", "I_share_nom", "NX_share_nom"]
                           if c in nominal_df.columns]
-        if nom_share_cols:
-            disp = nominal_df[["quarter"] + nom_share_cols].dropna(
-                subset=nom_share_cols, how="all").copy()
-            rename = {"C_share_nom": "C %GDP", "G_share_nom": "G %GDP",
-                      "I_share_nom": "I %GDP", "NX_share_nom": "NX %GDP"}
-            rename = {k: v for k, v in rename.items() if k in nom_share_cols}
-            disp = disp.rename(columns=rename)
-            pdf.add_table(
-                disp, ["quarter"] + list(rename.values()),
-                fmt={v: "{:.1f}%" for v in rename.values()},
-                title="GDP Composition -- % of GDP (current prices)"
+        last_row = nominal_df[["quarter"] + nom_share_cols].dropna(
+            subset=nom_share_cols, how="all").iloc[-1] if nom_share_cols else None
+        if last_row is not None:
+            q = _fmt_quarter(last_row["quarter"])
+            parts = []
+            name_map = {"C_share_nom": "C", "G_share_nom": "G",
+                        "I_share_nom": "I", "NX_share_nom": "NX"}
+            for col in nom_share_cols:
+                parts.append(f"{name_map[col]} = {last_row[col]:.1f}%")
+            pdf.body_text(
+                f"Latest quarter ({q}): {', '.join(parts)}. "
+                "Shares at current prices (nominal pesos). "
+                "I = FBCF sub-components (construction, domestic/imported machinery, transport). "
+                "NX = net exports (X - M); shown separately when negative."
             )
-        pdf.add_chart(chart_gdp_nominal(nominal_df),
-                      caption="GDP composition (nominal): C, G, I stacked + NX line (% of GDP)")
-
-    elif components_df is not None and not components_df.empty:
-        # Fallback to real shares if nominal unavailable
-        pdf.body_text(
-            "Nominal GDP composition unavailable -- showing constant-2004-price shares as reference."
-        )
-
-    # Real shares as secondary reference
-    if components_df is not None and not components_df.empty:
-        real_share_cols = [c for c in ["C_share_real", "G_share_real", "I_share_real", "NX_share_real"]
-                           if c in components_df.columns]
-        if real_share_cols:
-            disp_r = components_df[["quarter"] + real_share_cols].dropna(
-                subset=real_share_cols, how="all").copy()
-            rename_r = {"C_share_real": "C %GDP (real)", "G_share_real": "G %GDP (real)",
-                        "I_share_real": "I %GDP (real)", "NX_share_real": "NX %GDP (real)"}
-            rename_r = {k: v for k, v in rename_r.items() if k in real_share_cols}
-            disp_r = disp_r.rename(columns=rename_r)
-            pdf.add_table(
-                disp_r, ["quarter"] + list(rename_r.values()),
-                fmt={v: "{:.1f}%" for v in rename_r.values()},
-                title="GDP Composition -- % of GDP (constant 2004 prices, reference)"
-            )
-            pdf.add_chart(chart_gdp_composition(components_df),
-                          caption="GDP composition (real): constant 2004 prices")
-
-        pdf.body_text(
-            "NOTE: Shares in constant 2004 prices (real) diverge from nominal shares due to base-year "
-            "effects and relative price changes. NX appears negative in real terms even when the nominal "
-            "trade balance is positive -- import VOLUMES grew faster than export volumes (real exchange "
-            "rate appreciation effect). For dollar flow analysis use the current account section, "
-            "not NX share here."
-        )
+        pdf.add_chart(chart_gdp_composition_pie(nominal_df),
+                      caption="GDP expenditure composition -- latest quarter (current prices)")
 
     # ---- FBCF breakdown ----
     if fbcf_df is not None and not fbcf_df.empty:
@@ -514,17 +442,11 @@ def build_md_section(data: dict) -> str:
         nom_cols = [c for c in ["C_share_nom", "G_share_nom", "I_share_nom", "NX_share_nom"]
                     if c in nominal_df.columns]
         if nom_cols:
-            out += "\n\n**GDP Composition -- % of GDP (current prices)**\n\n" + \
-                   _md_table(nominal_df, ["quarter"] + nom_cols,
-                             fmt={c: "{:.1f}%" for c in nom_cols})
-
-    if components_df is not None and not components_df.empty:
-        real_cols = [c for c in ["C_share_real", "G_share_real", "I_share_real", "NX_share_real"]
-                     if c in components_df.columns]
-        if real_cols:
-            out += "\n\n**GDP Composition -- % of GDP (constant 2004 prices, reference)**\n\n" + \
-                   _md_table(components_df, ["quarter"] + real_cols,
-                             fmt={c: "{:.1f}%" for c in real_cols})
+            last = nominal_df[["quarter"] + nom_cols].dropna(subset=nom_cols, how="all").iloc[-1]
+            name_map = {"C_share_nom": "C", "G_share_nom": "G",
+                        "I_share_nom": "I", "NX_share_nom": "NX"}
+            parts = ", ".join(f"{name_map[c]} = {last[c]:.1f}%" for c in nom_cols)
+            out += f"\n\n**GDP Composition (latest quarter: {_fmt_quarter(last['quarter'])}):** {parts}"
 
     if fbcf_df is not None and not fbcf_df.empty:
         share_cols = [f"{k}_share" for k in FBCF_META if f"{k}_share" in fbcf_df.columns]

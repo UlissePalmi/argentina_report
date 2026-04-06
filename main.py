@@ -15,6 +15,15 @@ The pipeline will:
 import sys
 from pathlib import Path
 
+from signals import wages as sig_wages
+from signals import credit as sig_credit
+from signals import investment as sig_investment
+from signals import inflation as sig_inflation
+from signals import external as sig_external
+from signals import production as sig_production
+from signals import labor as sig_labor
+from signals import master as sig_master
+
 from external.fetch import (
     fetch_reserves, fetch_exchange_rate,
     fetch_current_account, fetch_trade_balance,
@@ -144,6 +153,23 @@ def run_pipeline() -> dict:
         warnings.append("Productivity: SKIPPED -- requires EMAE + employment data")
 
     # ------------------------------------------------------------------
+    # Layer 3: Compute signals (reads CSVs → outputs data/signals/*.json)
+    # ------------------------------------------------------------------
+    log.info("Computing domain signals...")
+    try:
+        sig_wages.compute()
+        sig_credit.compute()
+        sig_investment.compute()
+        sig_inflation.compute()
+        sig_external.compute()
+        sig_production.compute()
+        sig_labor.compute()
+        sig_master.compute()
+        log.info("Signals computed successfully → data/signals/")
+    except Exception as e:
+        log.warning("Signal computation failed (non-critical): %s", e)
+
+    # ------------------------------------------------------------------
     # Build productivity deep-dive report
     # ------------------------------------------------------------------
     log.info("Building productivity deep-dive report...")
@@ -187,6 +213,10 @@ def run_pipeline() -> dict:
             "nominal_df":    nominal_df,
             "fbcf_df":       fbcf_df,
             "emae_df":       emae_df,
+        },
+        labor_data={
+            "consumption_df": consumption_df,
+            "employment_df":  employment_df,
         },
         consumption_data={
             "consumption_df": consumption_df,

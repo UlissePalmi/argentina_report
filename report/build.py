@@ -4,20 +4,23 @@ Report assembler — combines all module sections into PDF and markdown.
 This file owns:
   - ArgentinaPDF class (fpdf2 subclass)
   - _safe() latin-1 sanitiser
+  - build_executive_summary_section() — reads signals_master.json, renders verdict + scorecard
   - build_report() — calls each module's section builder in order
 """
 
+import json
 from datetime import date
 from pathlib import Path
 
 import pandas as pd
 from fpdf import FPDF, XPos, YPos
 
-from utils import REPORTS_DIR, get_logger
+from utils import REPORTS_DIR, SIGNALS_DIR, get_logger
 from external.section    import build_pdf_section as ext_pdf,  build_md_section as ext_md
 from inflation.section   import build_pdf_section as inf_pdf,  build_md_section as inf_md
 from gdp.section         import build_pdf_section as gdp_pdf,  build_md_section as gdp_md
 from consumption.section import build_pdf_section as con_pdf,  build_md_section as con_md
+from labor.section       import build_pdf_section as lab_pdf,  build_md_section as lab_md
 
 log = get_logger("report.build")
 
@@ -42,6 +45,257 @@ def _safe(text: str) -> str:
 def _first_sentence(text: str) -> str:
     idx = text.find(". ")
     return text[:idx + 1] if idx != -1 else text.rstrip(".") + "."
+
+
+# ---------------------------------------------------------------------------
+# Executive summary helpers
+# ---------------------------------------------------------------------------
+
+VERDICT_DISPLAY = {
+    "crisis_risk":
+        ("CRISIS RISK", (192, 57, 43), (255, 255, 255)),
+    "fragile_recovery":
+        ("FRAGILE RECOVERY", (211, 84, 0), (255, 255, 255)),
+    "structural_improvement_underway_unconfirmed":
+        ("STRUCTURAL IMPROVEMENT UNDERWAY -- UNCONFIRMED", (25, 113, 194), (255, 255, 255)),
+    "recovery_confirmed_watch_sustainability":
+        ("RECOVERY CONFIRMED -- WATCH SUSTAINABILITY", (39, 174, 96), (255, 255, 255)),
+    "sustainable_growth":
+        ("SUSTAINABLE GROWTH", (27, 94, 32), (255, 255, 255)),
+}
+
+SIGNAL_COLORS = {
+    "green":  (39, 174, 96),
+    "yellow": (230, 126, 34),
+    "red":    (192, 57, 43),
+    "grey":   (160, 160, 160),
+}
+
+
+def _load_master_signal() -> dict | None:
+    path = SIGNALS_DIR / "signals_master.json"
+    if not path.exists():
+        return None
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
+def build_executive_summary_section(pdf: "ArgentinaPDF") -> str:
+    """
+    Render the executive summary page into the PDF.
+    Returns the markdown equivalent string.
+    """
+    master = _load_master_signal()
+    if master is None:
+        pdf.section_title("1. Executive Summary")
+        pdf.body_text("Signal data unavailable -- run main.py to generate signals.")
+        return "## 1. Executive Summary\n\nSignal data unavailable.\n"
+
+    verdict_key  = master.get("verdict", "structural_improvement_underway_unconfirmed")
+    label, bg, fg = VERDICT_DISPLAY.get(verdict_key, VERDICT_DISPLAY["structural_improvement_underway_unconfirmed"])
+    as_of        = master.get("as_of_date", "")
+    scorecard    = master.get("scorecard", {})
+    mv           = master.get("master_variable", {})
+    enablers     = master.get("enablers", {})
+    drivers      = master.get("drivers", {})
+    accelerators = master.get("accelerators", {})
+
+    # ------------------------------------------------------------------
+    # Section heading
+    # ------------------------------------------------------------------
+    pdf.section_title("1. Executive Summary")
+
+    # ------------------------------------------------------------------
+    # Verdict banner — full-width colored box
+    # ------------------------------------------------------------------
+    avail_w = pdf.PAGE_W - 2 * pdf.MARGIN
+    banner_h = 14
+
+    pdf.set_fill_color(*bg)
+    pdf.set_text_color(*fg)
+    pdf.set_font("Helvetica", "B", 13)
+    pdf.cell(avail_w, banner_h, _safe(label), border=0, fill=True, align="C",
+             new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.ln(1)
+
+    if as_of:
+        pdf.set_font("Helvetica", "I", 8)
+        pdf.set_text_color(100, 100, 100)
+        pdf.cell(avail_w, 5, f"As of {as_of}", align="C",
+                 new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.ln(5)
+    pdf.set_text_color(0, 0, 0)
+
+    # ------------------------------------------------------------------
+    # Traffic light scorecard table
+    # ------------------------------------------------------------------
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.set_text_color(60, 60, 60)
+    pdf.cell(0, 6, "Key Metrics Scorecard", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.ln(1)
+
+    col_widths = [avail_w * 0.42, avail_w * 0.18, avail_w * 0.12, avail_w * 0.28]
+    headers    = ["Metric", "Value", "Signal", "Threshold"]
+
+    # Table header
+    pdf.set_font("Helvetica", "B", 8.5)
+    pdf.set_fill_color(30, 100, 200)
+    pdf.set_text_color(255, 255, 255)
+    for h, w in zip(headers, col_widths):
+        pdf.cell(w, 6, h, border=0, fill=True, align="C")
+    pdf.ln()
+
+    # Table rows
+    pdf.set_font("Helvetica", "", 8.5)
+    for i, (metric_name, item) in enumerate(scorecard.items()):
+        value_raw  = item.get("value")
+        signal_key = item.get("signal", "grey")
+        green_lbl  = item.get("green", "")
+        note       = item.get("note", "")
+
+        # Format value
+        if value_raw is None:
+            value_str = "n/a"
+        elif isinstance(value_raw, float):
+            value_str = f"{value_raw:+.1f}%" if abs(value_raw) < 1000 else f"${value_raw:.1f}B"
+            # Reserves and CA are dollar values, not percentages
+            if "Reserve" in metric_name or "Account" in metric_name:
+                value_str = f"${value_raw:.1f}B" if value_raw is not None else "n/a"
+        else:
+            value_str = str(value_raw)
+
+        # Threshold label: combine green + note
+        threshold = green_lbl
+        if note:
+            threshold = note[:35]  # truncate to fit
+
+        signal_rgb = SIGNAL_COLORS.get(signal_key, SIGNAL_COLORS["grey"])
+        row_bg     = (248, 248, 248) if i % 2 == 0 else (255, 255, 255)
+
+        pdf.set_fill_color(*row_bg)
+        pdf.set_text_color(40, 40, 40)
+        pdf.cell(col_widths[0], 5.5, _safe(metric_name), border=0, fill=True, align="L")
+        pdf.cell(col_widths[1], 5.5, _safe(value_str),   border=0, fill=True, align="C")
+
+        # Signal cell — colored background
+        pdf.set_fill_color(*signal_rgb)
+        pdf.set_text_color(255, 255, 255)
+        pdf.cell(col_widths[2], 5.5, signal_key.upper(), border=0, fill=True, align="C")
+
+        pdf.set_fill_color(*row_bg)
+        pdf.set_text_color(100, 100, 100)
+        pdf.cell(col_widths[3], 5.5, _safe(threshold), border=0, fill=True, align="L")
+        pdf.ln()
+
+    pdf.set_draw_color(200, 200, 200)
+    pdf.line(pdf.MARGIN, pdf.get_y(), pdf.PAGE_W - pdf.MARGIN, pdf.get_y())
+    pdf.ln(5)
+    pdf.set_text_color(0, 0, 0)
+
+    # ------------------------------------------------------------------
+    # Four-level snapshot
+    # ------------------------------------------------------------------
+    _render_level_row(pdf, "MASTER VARIABLE",
+                      f"Real wages {_fmt_pct(mv.get('value'))} YoY "
+                      f"({mv.get('consecutive_positive_months', 0)} consecutive positive months). "
+                      f"Productivity-backed: {mv.get('backed_by_productivity', 'unknown')}.",
+                      "green" if (mv.get("value") or 0) > 0 else "red")
+
+    _render_level_row(pdf, "DRIVERS",
+                      f"FBCF {_fmt_pct(drivers.get('investment_fbcf_yoy'))} YoY. "
+                      f"Formal employment {_fmt_pct(drivers.get('formal_employment_yoy'))} YoY. "
+                      f"Credit discipline: {drivers.get('credit_discipline', 'unknown')}.",
+                      "green" if (drivers.get("investment_fbcf_yoy") or 0) > 0 else "yellow")
+
+    _render_level_row(pdf, "ENABLERS",
+                      f"CPI {_fmt_pct(enablers.get('inflation_mom_latest'))} /month. "
+                      f"Disinflation confirmed: {enablers.get('disinflation_confirmed', 'unknown')}. "
+                      f"Gross reserves ${enablers.get('gross_reserves_bn') or 0:.1f}B "
+                      f"({enablers.get('reserves_trend', 'unknown')}).",
+                      "green" if enablers.get("disinflation_confirmed") else "yellow")
+
+    _render_level_row(pdf, "ACCELERATORS",
+                      f"Oil {_fmt_pct(accelerators.get('oil_yoy'))} YoY. "
+                      f"Vaca Muerta: {accelerators.get('vaca_muerta_signal', 'unknown')}.",
+                      "green" if (accelerators.get("oil_yoy") or 0) > 5 else "yellow")
+
+    pdf.ln(3)
+
+    # ------------------------------------------------------------------
+    # Markdown equivalent
+    # ------------------------------------------------------------------
+    md = _build_exec_summary_md(label, as_of, scorecard, mv, drivers, enablers, accelerators)
+    return md
+
+
+def _render_level_row(pdf: "ArgentinaPDF", level: str, text: str, signal: str):
+    """Render a single four-level framework row with a colored left indicator."""
+    avail_w   = pdf.PAGE_W - 2 * pdf.MARGIN
+    dot_w     = 3
+    label_w   = avail_w * 0.22
+    text_w    = avail_w - dot_w - label_w
+    row_h     = 7
+
+    color = SIGNAL_COLORS.get(signal, SIGNAL_COLORS["grey"])
+    pdf.set_fill_color(*color)
+    pdf.cell(dot_w, row_h, "", border=0, fill=True)
+
+    pdf.set_font("Helvetica", "B", 8.5)
+    pdf.set_text_color(40, 40, 40)
+    pdf.cell(label_w, row_h, level, border=0, fill=False, align="L")
+
+    pdf.set_font("Helvetica", "", 8.5)
+    pdf.set_text_color(60, 60, 60)
+    pdf.multi_cell(text_w, row_h, _safe(text), border=0, align="L")
+    pdf.ln(1)
+
+
+def _fmt_pct(v) -> str:
+    if v is None:
+        return "n/a"
+    return f"{v:+.1f}%"
+
+
+def _build_exec_summary_md(label, as_of, scorecard, mv, drivers, enablers, accelerators) -> str:
+    lines = ["## 1. Executive Summary", ""]
+    lines.append(f"### Verdict: {label}")
+    if as_of:
+        lines.append(f"*As of {as_of}*")
+    lines.append("")
+
+    # Scorecard table
+    lines.append("| Metric | Value | Signal | Target |")
+    lines.append("|---|---|---|---|")
+    for metric, item in scorecard.items():
+        v = item.get("value")
+        val_str = "n/a"
+        if v is not None:
+            if "Reserve" in metric or "Account" in metric:
+                val_str = f"${v:.1f}B"
+            else:
+                val_str = f"{v:+.1f}%"
+        sig = item.get("signal", "grey").upper()
+        tgt = item.get("green", "")
+        lines.append(f"| {metric} | {val_str} | {sig} | {tgt} |")
+    lines.append("")
+
+    # Four-level snapshot
+    lines.append("### Framework Assessment")
+    lines.append(f"- **MASTER VARIABLE**: Real wages {_fmt_pct(mv.get('value'))} YoY "
+                 f"({mv.get('consecutive_positive_months', 0)} consecutive positive months)")
+    lines.append(f"- **DRIVERS**: FBCF {_fmt_pct(drivers.get('investment_fbcf_yoy'))} YoY | "
+                 f"Employment {_fmt_pct(drivers.get('formal_employment_yoy'))} YoY | "
+                 f"Credit discipline: {drivers.get('credit_discipline', 'unknown')}")
+    lines.append(f"- **ENABLERS**: CPI {_fmt_pct(enablers.get('inflation_mom_latest'))}/month | "
+                 f"Disinflation confirmed: {enablers.get('disinflation_confirmed')} | "
+                 f"Gross reserves ${enablers.get('gross_reserves_bn') or 0:.1f}B")
+    lines.append(f"- **ACCELERATORS**: Oil {_fmt_pct(accelerators.get('oil_yoy'))} YoY | "
+                 f"Vaca Muerta: {accelerators.get('vaca_muerta_signal', 'unknown')}")
+    lines.append("")
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
@@ -149,6 +403,7 @@ def build_report(
     inflation_data: dict,
     gdp_data: dict,
     consumption_data: dict,
+    labor_data: dict | None = None,
 ) -> dict[str, Path]:
     """
     Assemble the full Argentina Macro Report.
@@ -158,9 +413,11 @@ def build_report(
         inflation_data   = {"cpi_df": ...}
         gdp_data         = {"gdp_df": ..., "components_df": ..., "emae_df": ...}
         consumption_data = {"consumption_df": ...}
+        labor_data       = {"consumption_df": ..., "employment_df": ...}
 
     Returns dict with keys 'pdf' and 'md'.
     """
+    labor_data = labor_data or {}
     from external.section import summarise as ext_summary
     from inflation.section import summarise as inf_summary
     from gdp.section import summarise as gdp_summary
@@ -196,9 +453,12 @@ def build_report(
     pdf.line(15, pdf.get_y() + 2, 195, pdf.get_y() + 2)
     pdf.ln(8)
 
+    exec_summary_md = build_executive_summary_section(pdf)
+
     ext_pdf(pdf, external_data)
     inf_pdf(pdf, inflation_data)
     gdp_pdf(pdf, gdp_data)
+    lab_pdf(pdf, labor_data)
     con_pdf(pdf, consumption_data)
 
     # Summary
@@ -222,10 +482,15 @@ def build_report(
     ext_section = ext_md(external_data)
     inf_section = inf_md(inflation_data)
     gdp_section = gdp_md(gdp_data)
+    lab_section = lab_md(labor_data)
     con_section = con_md(consumption_data)
 
     md = f"""# Argentina Macro Report
 *Generated {today}*
+
+---
+
+{exec_summary_md}
 
 ---
 
@@ -238,6 +503,10 @@ def build_report(
 ---
 
 {gdp_section}
+
+---
+
+{lab_section}
 
 ---
 
