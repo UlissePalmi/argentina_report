@@ -9,7 +9,7 @@ from pathlib import Path
 import pandas as pd
 from fpdf import XPos, YPos
 
-from consumption.report import ConsumptionPDF, chart_yoy_mom, _avg3, _pct
+from sections.consumption.report import ConsumptionPDF, chart_yoy_mom, _avg3, _pct
 from report.build import _safe
 from utils import REPORTS_DIR, get_logger
 

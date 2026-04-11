@@ -4,17 +4,15 @@ Sources: datos.gob.ar (primary), BCRA REST, IMF SDMX, World Bank (fallbacks).
 """
 
 import socket
-from datetime import date
 
 import pandas as pd
 
 from utils import EXTERNAL_DIR, fetch_json, get_logger
-from external.client import DatosClient, WorldBankClient, BCRAClient, _start
+from external.client import DatosClient, WorldBankClient, _start
 
-log  = get_logger("fetch.reserves")
-_d   = DatosClient()
-_wb  = WorldBankClient()
-_bcra = BCRAClient()
+log   = get_logger("fetch.reserves")
+_d    = DatosClient()
+_wb   = WorldBankClient()
 
 # Series IDs
 RESERVES_DAILY   = "92.2_RESERVAS_IRES_0_0_32_40"
@@ -73,12 +71,6 @@ def fetch_reserves(months: int = 24) -> pd.DataFrame | None:
             df = raw2.rename(columns={RESERVES_MONTHLY: "reserves_usd_m"})[["date", "reserves_usd_m"]]
 
     if df is None:
-        log.warning("BCRA reserves: datos.gob.ar failed -- trying BCRA REST API")
-        raw3 = _bcra.fetch_variable(1, start, date.today().strftime("%Y-%m-%d"))
-        if raw3 is not None:
-            df = _to_monthly_last(raw3.rename(columns={"value": "reserves_usd_m"}), "reserves_usd_m")
-
-    if df is None:
         log.warning("BCRA reserves: all sources failed.")
         return None
 
@@ -92,60 +84,21 @@ def fetch_reserves(months: int = 24) -> pd.DataFrame | None:
     # This is a known approximation; update CHINA_SWAP_BN if BCRA discloses changes.
     # Try BCRA variable 15 first for a direct API figure.
     # ------------------------------------------------------------------
-    net_col = _fetch_bcra_net_reserves(months)
-    if net_col is not None and len(net_col) > 0:
-        # Merge BCRA net series into df on nearest month
-        net_col["_ym"] = net_col["date"].dt.to_period("M")
-        df["_ym"]      = df["date"].dt.to_period("M")
-        merged = df.merge(net_col[["_ym", "net_reserves_usd_bn"]], on="_ym", how="left")
-        df["net_reserves_usd_bn"] = merged["net_reserves_usd_bn"].values
-        df = df.drop(columns=["_ym"])
-        log.info("Net reserves: BCRA API source")
-    else:
-        CHINA_SWAP_BN = 18.5   # USD bn drawn; see methodology note above
-        OTHER_LIAB_BN =  1.5   # Other short-term (repos, minor items)
-        df["net_reserves_usd_bn"] = (
-            df["reserves_usd_bn"] - CHINA_SWAP_BN - OTHER_LIAB_BN
-        ).round(2)
-        log.info("Net reserves: estimated (gross - %.1fB China swap - %.1fB other)",
-                 CHINA_SWAP_BN, OTHER_LIAB_BN)
+    # Net reserves estimate: gross minus known short-term liabilities.
+    # BCRA API deprecated (all versions); no datos.gob.ar series for net figure.
+    # China RMB swap with PBoC: ~CNY 130B drawn ≈ USD 18.5B as of 2024.
+    # Update CHINA_SWAP_BN if BCRA publishes changes to the drawn amount.
+    CHINA_SWAP_BN = 18.5
+    OTHER_LIAB_BN =  1.5   # repos, minor short-term items
+    df["net_reserves_usd_bn"] = (
+        df["reserves_usd_bn"] - CHINA_SWAP_BN - OTHER_LIAB_BN
+    ).round(2)
+    log.info("Net reserves: estimated (gross - %.1fB China swap - %.1fB other)",
+             CHINA_SWAP_BN, OTHER_LIAB_BN)
 
     df.to_csv(EXTERNAL_DIR / "bcra_reserves.csv", index=False)
     log.info("BCRA reserves saved -> bcra_reserves.csv  (%d rows)", len(df))
     return df
-
-
-def _fetch_bcra_net_reserves(months: int) -> pd.DataFrame | None:
-    """
-    Try BCRA v2.0 variables for net reserves components.
-    Returns DataFrame with columns [date, net_reserves_usd_bn] if successful,
-    None if no plausible data found.
-
-    BCRA variable 15: "Reservas Internacionales Netas de Pasivos del Sector Público"
-    (in USD millions if it exists on v2.0; validation: must be in [-10, 35] range)
-    """
-    start = _start(months, buffer=2)
-    for var_id in [15, 16]:
-        try:
-            raw = _bcra.fetch_variable(var_id, start, date.today().strftime("%Y-%m-%d"))
-            if raw is None or raw.empty:
-                continue
-            sample_val = raw["value"].dropna()
-            if sample_val.empty:
-                continue
-            # Validate: net reserves in USD millions should be in [-20000, 40000]
-            # (i.e., $-20B to $40B — outside this range it's a different variable)
-            med = float(sample_val.median())
-            if not (-20_000 < med < 40_000):
-                log.debug("BCRA var %d median %.0f out of reserves range, skipping", var_id, med)
-                continue
-            df = _to_monthly_last(raw.rename(columns={"value": "net_usd_m"}), "net_usd_m")
-            df["net_reserves_usd_bn"] = df["net_usd_m"] / 1_000
-            log.info("BCRA net reserves from variable %d", var_id)
-            return df[["date", "net_reserves_usd_bn"]]
-        except Exception as e:
-            log.debug("BCRA var %d failed: %s", var_id, e)
-    return None
 
 
 def fetch_exchange_rate(months: int = 24) -> pd.DataFrame | None:

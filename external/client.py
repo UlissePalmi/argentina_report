@@ -3,7 +3,7 @@ Shared API clients — datos.gob.ar, World Bank, BCRA.
 Not called from main.py; imported by the topic fetch modules.
 """
 
-from datetime import date, datetime as _dt, timedelta
+from datetime import date, timedelta
 
 import pandas as pd
 
@@ -52,27 +52,5 @@ class WorldBankClient:
         return pd.DataFrame(rows).sort_values("date").reset_index(drop=True) if rows else None
 
 
-class BCRAClient:
-    """BCRA REST API — fetches in 364-day chunks to respect the API limit."""
-    URL     = "https://api.bcra.gob.ar/estadisticas/v2.0"
-    HEADERS = {"accept": "application/json"}
-
-    def fetch_variable(self, var_id: int, desde: str, hasta: str) -> pd.DataFrame | None:
-        start, end, rows = _dt.strptime(desde, "%Y-%m-%d"), _dt.strptime(hasta, "%Y-%m-%d"), []
-        cursor = start
-        while cursor < end:
-            chunk_end = min(cursor + timedelta(days=364), end)
-            d1, d2 = cursor.strftime("%Y-%m-%d"), chunk_end.strftime("%Y-%m-%d")
-            data = fetch_json(f"{self.URL}/datosvariable/{var_id}/{d1}/{d2}",
-                              headers=self.HEADERS, verify_ssl=False,
-                              cache_key=f"bcra_var{var_id}_{d1}_{d2}",
-                              max_retries=2, timeout=15)
-            if data:
-                rows.extend(data.get("results", []))
-            cursor = chunk_end + timedelta(days=1)
-        if not rows:
-            return None
-        df = pd.DataFrame(rows).rename(columns={"fecha": "date", "valor": "value"})
-        df["date"]  = pd.to_datetime(df["date"])
-        df["value"] = pd.to_numeric(df["value"], errors="coerce")
-        return df.drop_duplicates("date").sort_values("date").reset_index(drop=True)
+# BCRAClient removed -- api.bcra.gob.ar/estadisticas deprecated all versions (v1/v2/v3).
+# Reserves and credit data now sourced exclusively from datos.gob.ar.

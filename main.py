@@ -20,6 +20,7 @@ from signals import credit as sig_credit
 from signals import investment as sig_investment
 from signals import inflation as sig_inflation
 from signals import external as sig_external
+from signals import fiscal as sig_fiscal
 from signals import production as sig_production
 from signals import labor as sig_labor
 from signals import master as sig_master
@@ -36,8 +37,8 @@ from external.fetch import (
     fetch_production, fetch_agriculture,
     fetch_employment, fetch_ucii, compute_productivity,
 )
-from consumption.report import build_productivity_report
-from financing.report   import build_financing_report
+from sections.consumption.report import build_productivity_report
+from sections.financing.report   import build_financing_report
 from report.build        import build_report
 from utils               import get_logger
 
@@ -168,6 +169,7 @@ def run_pipeline() -> dict:
         sig_investment.compute()
         sig_inflation.compute()
         sig_external.compute()
+        sig_fiscal.compute()
         sig_production.compute()
         sig_labor.compute()
         sig_master.compute()
@@ -212,6 +214,9 @@ def run_pipeline() -> dict:
         },
         inflation_data={
             "cpi_df": cpi_df,
+        },
+        fiscal_data={
+            "fiscal_df": fiscal_df,
         },
         gdp_data={
             "gdp_df":        gdp_df,

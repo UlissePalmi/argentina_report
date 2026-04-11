@@ -16,12 +16,13 @@ import pandas as pd
 from fpdf import FPDF, XPos, YPos
 
 from utils import REPORTS_DIR, SIGNALS_DIR, get_logger
-from external.section    import build_pdf_section as ext_pdf,  build_md_section as ext_md
-from inflation.section   import build_pdf_section as inf_pdf,  build_md_section as inf_md
-from gdp.section         import build_pdf_section as gdp_pdf,  build_md_section as gdp_md
-from production.section  import build_pdf_section as pro_pdf,  build_md_section as pro_md
-from consumption.section import build_pdf_section as con_pdf,  build_md_section as con_md
-from labor.section       import build_pdf_section as lab_pdf,  build_md_section as lab_md
+from external.section              import build_pdf_section as ext_pdf,  build_md_section as ext_md
+from sections.inflation.section    import build_pdf_section as inf_pdf,  build_md_section as inf_md
+from sections.fiscal.section       import build_pdf_section as fis_pdf,  build_md_section as fis_md
+from sections.gdp.section          import build_pdf_section as gdp_pdf,  build_md_section as gdp_md
+from sections.production.section   import build_pdf_section as pro_pdf,  build_md_section as pro_md
+from sections.consumption.section  import build_pdf_section as con_pdf,  build_md_section as con_md
+from sections.labor.section        import build_pdf_section as lab_pdf,  build_md_section as lab_md
 
 log = get_logger("report.build")
 
@@ -872,6 +873,7 @@ def build_report(
     consumption_data: dict,
     labor_data: dict | None = None,
     production_data: dict | None = None,
+    fiscal_data: dict | None = None,
 ) -> dict[str, Path]:
     """
     Assemble the full Argentina Macro Report.
@@ -888,6 +890,7 @@ def build_report(
     """
     labor_data      = labor_data or {}
     production_data = production_data or {}
+    fiscal_data     = fiscal_data or {}
 
     today = date.today().strftime("%B %d, %Y")
 
@@ -915,6 +918,7 @@ def build_report(
 
     ext_pdf(pdf, external_data)
     inf_pdf(pdf, inflation_data)
+    fis_pdf(pdf, fiscal_data)
     gdp_pdf(pdf, gdp_data)
     pro_pdf(pdf, production_data)
     lab_pdf(pdf, labor_data)
@@ -939,6 +943,7 @@ def build_report(
     # =========================================================
     ext_section = ext_md(external_data)
     inf_section = inf_md(inflation_data)
+    fis_section = fis_md(fiscal_data)
     gdp_section = gdp_md(gdp_data)
     pro_section = pro_md(production_data)
     lab_section = lab_md(labor_data)
@@ -958,6 +963,10 @@ def build_report(
 ---
 
 {inf_section}
+
+---
+
+{fis_section}
 
 ---
 

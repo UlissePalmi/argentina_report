@@ -26,9 +26,9 @@ from fpdf import XPos, YPos
 
 from report.build import ArgentinaPDF, _safe
 from utils import CHARTS_DIR, REPORTS_DIR, get_logger
-import production.section  as prod_section
-import productivity.section as prodv_section
-from gdp.section import build_pdf_section as _gdp_section
+import sections.production.section  as prod_section
+import sections.productivity.section as prodv_section
+from sections.gdp.section import build_pdf_section as _gdp_section
 
 log = get_logger("consumption.report")
 
