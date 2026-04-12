@@ -3,9 +3,11 @@ External sector: fiscal balance (public sector surplus/deficit).
 
 Primary: datos.gob.ar — IMIG monthly series (Secretaria de Hacienda).
   Fetches both primary result and financial result (after interest) simultaneously.
-  Normalises to % GDP using World Bank annual nominal GDP (ARS), interpolated monthly.
+  Normalises to % GDP using INDEC quarterly nominal GDP (datos.gob.ar, annualized rates).
+  For months beyond last available quarter, extends using CPI index.
 
-Fallback: World Bank GC.BAL.CASH.GD.ZS (annual, % GDP).
+Fallback: World Bank NY.GDP.MKTP.CN (annual) if INDEC quarterly unavailable.
+Fiscal fallback: World Bank GC.BAL.CASH.GD.ZS (annual, % GDP).
 
 Output: data/external/fiscal_balance.csv
   Columns: date,
@@ -29,7 +31,11 @@ _wb = WorldBankClient()
 PRIMARY_ID   = "452.3_RESULTADO_RIO_0_M_18_54"   # IMIG resultado primario (excl. interest)
 FINANCIAL_ID = "452.3_RESULTADO_ERO_0_M_20_25"   # IMIG resultado financiero (incl. interest) -- same dataset
 
-# World Bank: annual nominal GDP in current ARS (for % GDP normalization)
+# INDEC quarterly nominal GDP — annualized rates, millions of ARS current prices
+# Source: Secretaría de Programación Macroeconómica / INDEC, via datos.gob.ar
+INDEC_GDP_QUARTERLY = "166.2_PPIB_0_0_3"
+
+# World Bank: annual nominal GDP in current ARS (fallback if INDEC quarterly unavailable)
 WB_GDP_ARS   = "NY.GDP.MKTP.CN"
 
 # World Bank fallback fiscal indicators (% GDP, annual)
@@ -108,33 +114,93 @@ def fetch_fiscal(years: int = 6) -> pd.DataFrame | None:
 
 def _add_pct_gdp(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Normalise ARS bn columns to % of GDP using World Bank annual nominal GDP (ARS).
+    Normalise ARS bn columns to % of GDP.
 
-    Strategy:
-      - Fetch WB NY.GDP.MKTP.CN (annual ARS, current prices)
-      - Interpolate to monthly using linear growth between years
-      - fiscal_*_pct_gdp = (monthly ARS bn / (annual GDP ARS bn / 12)) * 100
+    Primary: INDEC quarterly nominal GDP (datos.gob.ar 166.2_PPIB_0_0_3).
+      Values are annualized quarterly rates in millions of ARS (current prices).
+      Each month in a quarter gets that quarter's annualized GDP as its denominator.
+      Months beyond the last published quarter are CPI-scaled forward.
 
-    If WB fetch fails, returns df unchanged (% GDP columns absent).
+    Fallback: World Bank NY.GDP.MKTP.CN (annual, interpolated to monthly + CPI extension).
+
+    Formula: fiscal_*_pct_gdp = (monthly_ars_bn / (annualized_gdp_bn / 12)) * 100
     """
-    try:
-        raw_gdp = _wb.fetch(WB_GDP_ARS, mrv=10)
-        if raw_gdp is None or raw_gdp.empty:
-            log.warning("Fiscal % GDP: WB nominal GDP unavailable")
-            return df
+    gdp_monthly = _build_gdp_monthly(df)
+    if gdp_monthly is None:
+        return df
 
-        # Build annual series: date = year-start, value in ARS bn
-        gdp_ann = raw_gdp.copy()
+    df["date"] = pd.to_datetime(df["date"])
+    merged = df.merge(gdp_monthly, on="date", how="left")
+    merged["_monthly_gdp"] = merged["gdp_ann_ars_bn"] / 12
+
+    for ars_col, pct_col in [
+        ("fiscal_primary_ars_bn",   "fiscal_primary_pct_gdp"),
+        ("fiscal_financial_ars_bn", "fiscal_financial_pct_gdp"),
+    ]:
+        if ars_col in merged.columns and merged["_monthly_gdp"].notna().any():
+            merged[pct_col] = (merged[ars_col] / merged["_monthly_gdp"] * 100).round(2)
+
+    return merged.drop(columns=["gdp_ann_ars_bn", "_monthly_gdp"], errors="ignore")
+
+
+def _build_gdp_monthly(df: pd.DataFrame) -> pd.DataFrame | None:
+    """
+    Build a monthly series of annualized nominal GDP in ARS bn.
+
+    Tries INDEC quarterly first, falls back to WB annual.
+    For months beyond the last data point, extends using CPI.
+    Returns DataFrame with columns: date, gdp_ann_ars_bn.
+    """
+    # ------------------------------------------------------------------
+    # Option 1: INDEC quarterly (datos.gob.ar) — annualized rates
+    # ------------------------------------------------------------------
+    try:
+        raw_q = _d.fetch([INDEC_GDP_QUARTERLY], limit=40, start_date="2018-01-01")
+        if raw_q is not None and INDEC_GDP_QUARTERLY in raw_q.columns:
+            gdp_q = raw_q[["date", INDEC_GDP_QUARTERLY]].copy()
+            gdp_q["date"] = pd.to_datetime(gdp_q["date"])
+            # values are millions ARS annualized → convert to ARS bn
+            gdp_q["gdp_ann_ars_bn"] = pd.to_numeric(gdp_q[INDEC_GDP_QUARTERLY], errors="coerce") / 1_000
+            gdp_q = gdp_q[["date", "gdp_ann_ars_bn"]].dropna().sort_values("date")
+
+            if not gdp_q.empty:
+                # Each quarterly point is the annualized rate for that quarter's 3 months.
+                # Expand: for each quarter start date Q, assign the value to Q, Q+1m, Q+2m.
+                rows = []
+                for _, row in gdp_q.iterrows():
+                    for m in range(3):
+                        rows.append({
+                            "date":          row["date"] + pd.DateOffset(months=m),
+                            "gdp_ann_ars_bn": row["gdp_ann_ars_bn"],
+                        })
+                gdp_monthly = pd.DataFrame(rows).sort_values("date").drop_duplicates("date")
+
+                # Extend beyond last quarter using CPI
+                last_date = gdp_monthly["date"].iloc[-1]
+                last_gdp  = float(gdp_monthly["gdp_ann_ars_bn"].iloc[-1])
+                gdp_monthly = _cpi_extend(gdp_monthly, last_date, last_gdp, ref_date=last_date)
+
+                log.info("Fiscal %% GDP: INDEC quarterly GDP (last Q: %s)", str(gdp_q["date"].iloc[-1])[:7])
+                return gdp_monthly
+    except Exception as e:
+        log.warning("INDEC quarterly GDP failed: %s", e)
+
+    # ------------------------------------------------------------------
+    # Option 2: World Bank annual (interpolated to monthly + CPI extension)
+    # ------------------------------------------------------------------
+    try:
+        raw_wb = _wb.fetch(WB_GDP_ARS, mrv=10)
+        if raw_wb is None or raw_wb.empty:
+            log.warning("Fiscal %% GDP: both INDEC quarterly and WB unavailable")
+            return None
+
+        gdp_ann = raw_wb.copy()
         gdp_ann["date"] = pd.to_datetime(gdp_ann["date"].astype(str), format="%Y")
         gdp_ann["gdp_ann_ars_bn"] = pd.to_numeric(gdp_ann["value"], errors="coerce") / 1e9
         gdp_ann = gdp_ann[["date", "gdp_ann_ars_bn"]].dropna().sort_values("date")
-
         if gdp_ann.empty:
-            return df
+            return None
 
-        # Interpolate to monthly: resample annual → monthly via linear fill.
-        # resample("MS") only spans between the known annual points (e.g. Jan 2015 → Jan 2024).
-        # Months after the last annual point need a separate forward extension.
         gdp_monthly = (
             gdp_ann.set_index("date")
             .resample("MS")
@@ -142,39 +208,67 @@ def _add_pct_gdp(df: pd.DataFrame) -> pd.DataFrame:
             .reset_index()
         )
 
-        # Extend from the month AFTER the last known annual point to cover the
-        # current data range (WB typically lags 1 year so 2025/2026 months are missing).
-        last_gdp  = float(gdp_ann["gdp_ann_ars_bn"].iloc[-1])
-        last_date = gdp_monthly["date"].iloc[-1]          # last month produced by resample
-        future_dates = pd.date_range(
-            start=last_date + pd.DateOffset(months=1),   # one month after resample end
-            periods=30, freq="MS",                        # cover 2.5 years forward
-        )
-        future_gdp = pd.DataFrame({
-            "date":           future_dates,
-            "gdp_ann_ars_bn": last_gdp,                  # flat at last known level (conservative)
-        })
-        gdp_monthly = pd.concat([gdp_monthly, future_gdp], ignore_index=True)
-        gdp_monthly = gdp_monthly.sort_values("date").drop_duplicates("date")
+        last_wb_year = int(gdp_ann["date"].iloc[-1].year)
+        last_date    = gdp_monthly["date"].iloc[-1]
+        last_gdp     = float(gdp_ann["gdp_ann_ars_bn"].iloc[-1])
 
-        # Merge onto fiscal df
-        df["date"] = pd.to_datetime(df["date"])
-        merged = df.merge(gdp_monthly, on="date", how="left")
+        # CPI scaling only for months after the last WB year
+        first_cpi_date = pd.Timestamp(year=last_wb_year + 1, month=1, day=1)
+        ref_date       = pd.Timestamp(year=last_wb_year,     month=12, day=1)
+        gdp_monthly    = _cpi_extend(gdp_monthly, last_date, last_gdp,
+                                     ref_date=ref_date, first_scaled=first_cpi_date)
 
-        # monthly GDP denominator = annual GDP / 12
-        merged["_monthly_gdp"] = merged["gdp_ann_ars_bn"] / 12
-
-        for ars_col, pct_col in [
-            ("fiscal_primary_ars_bn",   "fiscal_primary_pct_gdp"),
-            ("fiscal_financial_ars_bn", "fiscal_financial_pct_gdp"),
-        ]:
-            if ars_col in merged.columns and merged["_monthly_gdp"].notna().any():
-                merged[pct_col] = (merged[ars_col] / merged["_monthly_gdp"] * 100).round(2)
-
-        merged = merged.drop(columns=["gdp_ann_ars_bn", "_monthly_gdp"], errors="ignore")
-        log.info("Fiscal % GDP computed using WB nominal GDP (ARS)")
-        return merged
+        log.info("Fiscal %% GDP: WB annual GDP (last year: %s)", last_wb_year)
+        return gdp_monthly
 
     except Exception as e:
-        log.warning("Could not compute fiscal %% GDP: %s", e)
-        return df
+        log.warning("Could not build GDP monthly series: %s", e)
+        return None
+
+
+def _cpi_extend(gdp_monthly: pd.DataFrame, last_date: pd.Timestamp,
+                last_gdp: float, ref_date: pd.Timestamp,
+                first_scaled: pd.Timestamp | None = None) -> pd.DataFrame:
+    """
+    Append CPI-scaled monthly GDP rows from last_date+1m through ~2.5 years forward.
+
+    ref_date:     the month whose CPI level = scale 1.0 (the reference point)
+    first_scaled: first month that gets CPI scaling; months before this use scale=1.0
+                  (default: all future months are CPI-scaled from ref_date)
+    """
+    future_dates = pd.date_range(
+        start=last_date + pd.DateOffset(months=1),
+        periods=30, freq="MS",
+    )
+    if first_scaled is None:
+        first_scaled = future_dates[0]
+
+    # Load CPI index
+    cpi_map: dict = {}
+    try:
+        from utils import EXTERNAL_DIR as _ED
+        cpi_path = _ED.parent / "inflation" / "indec_cpi.csv"
+        if cpi_path.exists():
+            cpi_df = pd.read_csv(cpi_path, parse_dates=["date"])
+            cpi_df = cpi_df[["date", "cpi_index"]].dropna().sort_values("date")
+            # Reference CPI: last available month on or before ref_date
+            ref_rows = cpi_df[cpi_df["date"] <= ref_date]
+            if ref_rows.empty:
+                ref_rows = cpi_df   # fall back to earliest
+            ref_cpi = float(ref_rows["cpi_index"].iloc[-1])
+            for _, row in cpi_df[cpi_df["date"] >= first_scaled].iterrows():
+                cpi_map[row["date"]] = float(row["cpi_index"]) / ref_cpi
+    except Exception:
+        pass
+
+    future_rows = []
+    running_scale = 1.0
+    for d in sorted(future_dates):
+        if d >= first_scaled and d in cpi_map:
+            running_scale = cpi_map[d]
+        elif d < first_scaled:
+            running_scale = 1.0
+        future_rows.append({"date": d, "gdp_ann_ars_bn": last_gdp * running_scale})
+
+    result = pd.concat([gdp_monthly, pd.DataFrame(future_rows)], ignore_index=True)
+    return result.sort_values("date").drop_duplicates("date")

@@ -25,6 +25,7 @@ from signals import production as sig_production
 from signals import labor as sig_labor
 from signals import master as sig_master
 
+from external.debt  import fetch_govt_ext_debt
 from external.fetch import (
     fetch_reserves, fetch_exchange_rate,
     fetch_current_account, fetch_trade_balance,
@@ -87,6 +88,11 @@ def run_pipeline() -> dict:
     fiscal_df = fetch_fiscal(years=6)
     if fiscal_df is None:
         warnings.append("Fiscal balance: FAILED (non-critical -- scorecard will show n/a)")
+
+    log.info("[1/4g] Fetching government external debt breakdown...")
+    debt_df = fetch_govt_ext_debt(quarters=10)
+    if debt_df is None:
+        warnings.append("Govt ext debt breakdown: FAILED (non-critical)")
 
     # ------------------------------------------------------------------
     # GDP
@@ -217,6 +223,9 @@ def run_pipeline() -> dict:
         },
         fiscal_data={
             "fiscal_df": fiscal_df,
+        },
+        debt_data={
+            "debt_df": debt_df,
         },
         gdp_data={
             "gdp_df":        gdp_df,
