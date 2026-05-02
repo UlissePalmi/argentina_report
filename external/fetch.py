@@ -5,7 +5,8 @@ main.py imports from here; topic modules live in external/<topic>.py.
 
 from external.reserves    import (fetch_reserves, fetch_exchange_rate,
                                    fetch_current_account, fetch_trade_balance,
-                                   fetch_external_debt, fetch_current_account_pct_gdp)
+                                   fetch_external_debt, fetch_current_account_pct_gdp,
+                                   fetch_money_supply)
 from external.fiscal      import fetch_fiscal
 from external.gdp         import (fetch_gdp_growth, fetch_gdp_components, fetch_emae,
                                    fetch_gdp_nominal, fetch_fbcf_breakdown)

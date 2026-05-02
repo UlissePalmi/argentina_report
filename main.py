@@ -41,6 +41,7 @@ from external.fetch import (
 from sections.consumption.report import build_productivity_report
 from sections.financing.report   import build_financing_report
 from report.build        import build_report
+from svar.run            import run_svar
 from utils               import get_logger
 
 log = get_logger("main")
@@ -182,6 +183,13 @@ def run_pipeline() -> dict:
         log.info("Signals computed successfully → data/signals/")
     except Exception as e:
         log.warning("Signal computation failed (non-critical): %s", e)
+
+    # ------------------------------------------------------------------
+    # ------------------------------------------------------------------
+    # SVAR model — Layer 3.5
+    # ------------------------------------------------------------------
+    log.info("Running SVAR inflation dynamics model...")
+    run_svar()
 
     # ------------------------------------------------------------------
     # Build productivity deep-dive report

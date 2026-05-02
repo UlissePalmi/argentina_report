@@ -22,6 +22,7 @@ EXPORTS_ID       = "75.3_IETG_0_M_31"
 IMPORTS_ID       = "76.3_ITG_0_M_17"
 CA_QUARTERLY_ID  = "160.2_TL_CUENNTE_0_T_22"
 IMF_BASE         = "https://dataservices.imf.org/REST/SDMX_JSON.svc"
+M2_SERIES_ID     = "90.1_AMTMA_0_0_39"   # M2 privado, monthly, millions ARS (Sep 2013–)
 
 
 def _to_monthly_last(raw: pd.DataFrame, value_col: str) -> pd.DataFrame:
@@ -113,6 +114,33 @@ def fetch_exchange_rate(months: int = 24) -> pd.DataFrame | None:
             return df
     log.warning("BCRA FX rate: all sources failed.")
     return None
+
+
+def fetch_money_supply(months: int = 24) -> pd.DataFrame | None:
+    """
+    Fetch M2 private sector money supply (nominal ARS) and compute YoY growth.
+    Columns: date, m2_ars_bn, m2_yoy_pct
+    Source: BCRA via datos.gob.ar (series 90.1_AMTMA_0_0_39, Sep 2013–present).
+    Requires 13+ months to compute first YoY — fetch with buffer.
+    """
+    # Need 12 extra months beyond requested window to compute YoY from the start
+    start = _start(months + 13, buffer=1)
+    raw = _d.fetch([M2_SERIES_ID], limit=months + 20, start_date=start)
+    if raw is None or M2_SERIES_ID not in raw.columns:
+        log.warning("BCRA M2: datos.gob.ar fetch failed.")
+        return None
+
+    df = raw[["date", M2_SERIES_ID]].rename(columns={M2_SERIES_ID: "m2_ars_m"}).dropna()
+    df = df.sort_values("date").reset_index(drop=True)
+    df["m2_ars_bn"]  = df["m2_ars_m"] / 1_000
+    df["m2_yoy_pct"] = df["m2_ars_m"].pct_change(12) * 100
+    df = df[["date", "m2_ars_bn", "m2_yoy_pct"]].dropna(subset=["m2_yoy_pct"])
+    df = df.tail(months).reset_index(drop=True)
+
+    df.to_csv(EXTERNAL_DIR / "bcra_m2.csv", index=False)
+    log.info("BCRA M2 saved -> bcra_m2.csv  (%d rows, latest: %s)",
+             len(df), df["date"].iloc[-1].strftime("%Y-%m") if not df.empty else "n/a")
+    return df
 
 
 def fetch_current_account(quarters: int = 10) -> pd.DataFrame | None:

@@ -24,6 +24,7 @@ from sections.production.section   import build_pdf_section as pro_pdf,  build_m
 from sections.consumption.section  import build_pdf_section as con_pdf,  build_md_section as con_md
 from sections.labor.section        import build_pdf_section as lab_pdf,  build_md_section as lab_md
 from sections.debt.section         import build_pdf_section as dbt_pdf,  build_md_section as dbt_md
+from svar.section                  import build_pdf_section as svar_pdf, build_md_section as svar_md
 
 log = get_logger("report.build")
 
@@ -927,6 +928,7 @@ def build_report(
     pro_pdf(pdf, production_data)
     lab_pdf(pdf, labor_data)
     con_pdf(pdf, consumption_data)
+    svar_pdf(pdf, {})
 
     closing_md = build_closing_synthesis(pdf)
     pdf.ln(4)
