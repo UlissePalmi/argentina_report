@@ -17,6 +17,7 @@ log = get_logger("svar.section")
 SVAR_DIR = Path(__file__).parent.parent / "data" / "svar"
 
 SHOCK_LABELS = {
+    "m2_yoy_pct":                 "M2 growth (monetary policy)",
     "fx_mom_pct":                 "FX depreciation",
     "emae_yoy_pct":               "Activity (EMAE)",
     "real_total_credit_yoy_pct":  "Real credit",
@@ -92,18 +93,20 @@ def _interpretation(irf_data: dict, fevd_data: dict) -> str:
         f"({top_24_share:.0f}% of variance). "
     )
 
-    # Add FX share explicitly if it's not the top shock
+    # Add per-shock shares at 12 months
+    m2_12  = fevd_cpi.get("12",  {}).get("m2_yoy_pct", 0)
     fx_12  = fevd_cpi.get("12",  {}).get("fx_mom_pct",  0)
     wg_12  = fevd_cpi.get("12",  {}).get("real_wage_yoy_pct", 0)
     cr_12  = fevd_cpi.get("12",  {}).get("real_total_credit_yoy_pct", 0)
     act_12 = fevd_cpi.get("12",  {}).get("emae_yoy_pct", 0)
 
     p1 += (
-        f"At 12 months: FX={fx_12:.0f}%, wages={wg_12:.0f}%, "
+        f"At 12 months: M2={m2_12:.0f}%, FX={fx_12:.0f}%, wages={wg_12:.0f}%, "
         f"credit={cr_12:.0f}%, activity={act_12:.0f}%."
     )
 
-    # --- Paragraph 2: FX IRF — magnitude and persistence ---
+    # --- Paragraph 2: IRF magnitudes ---
+    m2_peak, m2_peak_t = _irf_peak(shocks, "m2_yoy_pct")
     fx_peak, fx_peak_t = _irf_peak(shocks, "fx_mom_pct")
     wg_peak, wg_peak_t = _irf_peak(shocks, "real_wage_yoy_pct")
     cr_peak, cr_peak_t = _irf_peak(shocks, "real_total_credit_yoy_pct")
@@ -134,16 +137,30 @@ def _interpretation(irf_data: dict, fevd_data: dict) -> str:
             )
 
     p2 += (
-        f"By comparison, a 1-sd real wage shock peaks at {_fmt(wg_peak)} pp (month {wg_peak_t}) "
-        f"and a 1-sd credit shock peaks at {_fmt(cr_peak)} pp (month {cr_peak_t}). "
+        f"A 1-sd M2 shock peaks at {_fmt(m2_peak)} pp (month {m2_peak_t}), "
+        f"a 1-sd real wage shock at {_fmt(wg_peak)} pp (month {wg_peak_t}), "
+        f"and a 1-sd credit shock at {_fmt(cr_peak)} pp (month {cr_peak_t}). "
     )
 
     # --- Paragraph 3: Policy implications ---
-    # Determine if FX is the dominant driver
-    fx_is_dominant = fx_12 == max(fx_12, wg_12, cr_12, act_12)
-    wg_is_dominant = wg_12 == max(fx_12, wg_12, cr_12, act_12)
+    # Determine dominant external driver (excluding own-inflation shock)
+    external_shares = {"m2": m2_12, "fx": fx_12, "wages": wg_12, "credit": cr_12, "activity": act_12}
+    dominant = max(external_shares, key=lambda k: external_shares[k])
+    fx_is_dominant = dominant == "fx"
+    wg_is_dominant = dominant == "wages"
+    m2_is_dominant = dominant == "m2"
 
-    if fx_is_dominant:
+    if m2_is_dominant:
+        p3 = (
+            "Policy implications: M2 growth is the dominant driver of inflation variance "
+            "at medium horizons, consistent with Argentina's history of monetary financing of "
+            "fiscal deficits. This finding validates the Milei administration's fiscal consolidation "
+            "strategy as the primary disinflation lever -- reducing the deficit eliminates the need "
+            "for monetary emission, which is the root cause identified by the data. The FX anchor "
+            "reinforces this channel but is secondary: exchange rate stability without fiscal "
+            "discipline is unsustainable as reserve depletion would eventually force a correction."
+        )
+    elif fx_is_dominant:
         p3 = (
             "Policy implications: the dominant role of FX shocks in inflation variance "
             "implies that exchange rate stability is the primary anchor for Argentine inflation -- "
@@ -175,6 +192,40 @@ def _interpretation(irf_data: dict, fevd_data: dict) -> str:
         )
 
     return "\n\n".join([data_note, p1, p2, p3])
+
+
+def _forecast_prose(forecast_data: dict) -> str:
+    """One-paragraph summary of the VAR forecast for CPI and FX."""
+    as_of    = forecast_data.get("as_of_date", "n/a")
+    horizons = forecast_data.get("horizons", [6, 12])
+    labels   = forecast_data.get("variable_labels", SHOCK_LABELS)
+    fc       = forecast_data.get("forecasts", {})
+
+    lines = [
+        f"Conditional VAR projections as of {as_of} "
+        f"(95% forecast intervals reflect model uncertainty, not structural risk):"
+    ]
+
+    for col in ["cpi_mom_pct", "fx_mom_pct"]:
+        if col not in fc:
+            continue
+        name  = labels.get(col, col)
+        point = fc[col]["point"]
+        lower = fc[col]["lower"]
+        upper = fc[col]["upper"]
+        parts = []
+        for h in horizons:
+            if h <= len(point):
+                pt, lo, hi = point[h - 1], lower[h - 1], upper[h - 1]
+                parts.append(f"+{h}M: {pt:+.2f}% [{lo:+.2f}%, {hi:+.2f}%]")
+        if parts:
+            lines.append(f"{name} -- {'; '.join(parts)}.")
+
+    lines.append(
+        "Wide confidence bands are expected given Argentina's structural breaks. "
+        "Treat these as model-implied conditional projections, not unconditional predictions."
+    )
+    return " ".join(lines)
 
 
 def build_pdf_section(pdf, data: dict) -> None:
@@ -243,6 +294,16 @@ def build_pdf_section(pdf, data: dict) -> None:
         if para.strip():
             pdf.body_text(para.strip())
 
+    # Forecasts
+    forecast_data = _load("forecast_results.json")
+    if forecast_data:
+        from svar.charts import chart_forecast
+        pdf.section_title("VAR Model Forecasts")
+        pdf.body_text(_forecast_prose(forecast_data))
+        fc_chart = chart_forecast(forecast_data)
+        if fc_chart:
+            pdf.add_chart(fc_chart, caption="VAR forecast: CPI inflation and FX (6M and 12M horizon, 95% CI)")
+
 
 def build_md_section(data: dict) -> str:
     irf_data  = _load("irf_results.json")
@@ -273,4 +334,10 @@ def build_md_section(data: dict) -> str:
         out += "**FEVD of CPI Inflation**\n\n" + "\n".join(rows) + "\n\n"
 
     out += _interpretation(irf_data, fevd_data)
+
+    forecast_data = _load("forecast_results.json")
+    if forecast_data:
+        out += "\n\n## VAR Model Forecasts\n\n"
+        out += _forecast_prose(forecast_data)
+
     return out

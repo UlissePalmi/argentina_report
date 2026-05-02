@@ -954,7 +954,8 @@ def build_report(
     gdp_section = gdp_md(gdp_data)
     pro_section = pro_md(production_data)
     lab_section = lab_md(labor_data)
-    con_section = con_md(consumption_data)
+    con_section  = con_md(consumption_data)
+    svar_section = svar_md({})
 
     md = f"""# Argentina Macro Report
 *Generated {today}*
@@ -994,6 +995,10 @@ def build_report(
 ---
 
 {con_section}
+
+---
+
+{svar_section}
 
 ---
 

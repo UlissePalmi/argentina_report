@@ -40,6 +40,7 @@ CHART_STYLE = {
 }
 
 SHOCK_COLORS = {
+    "m2_yoy_pct":                 "#0c8599",   # teal — monetary policy (M2)
     "fx_mom_pct":                 "#c92a2a",   # red — FX/exchange rate
     "emae_yoy_pct":               "#1971c2",   # blue — activity
     "real_total_credit_yoy_pct":  "#e67700",   # orange — credit
@@ -47,6 +48,7 @@ SHOCK_COLORS = {
     "cpi_mom_pct":                "#7950f2",   # purple — inflation
 }
 SHOCK_LABELS = {
+    "m2_yoy_pct":                 "M2 growth shock (monetary policy)",
     "fx_mom_pct":                 "FX depreciation shock",
     "emae_yoy_pct":               "Activity shock (EMAE)",
     "real_total_credit_yoy_pct":  "Real credit shock",
@@ -228,28 +230,122 @@ def chart_fevd_cpi(fevd_data: dict) -> str | None:
     return path
 
 
+def chart_forecast(forecast_data: dict) -> str | None:
+    """
+    History + forecast path for CPI inflation and FX, with 95% CI shading.
+    Two-panel chart: top = CPI MoM%, bottom = FX MoM%.
+    """
+    fc = forecast_data.get("forecasts", {})
+    history      = forecast_data.get("history", {})
+    hist_dates   = forecast_data.get("history_dates", [])
+    fc_dates     = forecast_data.get("forecast_dates", [])
+    horizons     = forecast_data.get("horizons", [6, 12])
+    as_of        = forecast_data.get("as_of_date", "")
+
+    vars_to_plot = [
+        ("cpi_mom_pct", "CPI Inflation (MoM %)", "Monthly CPI inflation (%)"),
+        ("fx_mom_pct",  "FX Depreciation (MoM %)", "ARS/USD monthly change (%)"),
+    ]
+    vars_to_plot = [(c, t, y) for c, t, y in vars_to_plot if c in fc and c in history]
+    if not vars_to_plot:
+        return None
+
+    path = str(CHARTS_DIR / "svar_forecast.png")
+    n_panels = len(vars_to_plot)
+
+    with plt.rc_context(CHART_STYLE):
+        fig, axes = plt.subplots(n_panels, 1, figsize=(12, 4 * n_panels), squeeze=False)
+        fig.suptitle(
+            f"VAR Model Forecasts (as of {as_of})\n"
+            f"6-month and 12-month horizon, 95% confidence bands",
+            fontsize=11, fontweight="bold"
+        )
+
+        for ax, (col, title, ylabel) in zip(axes[:, 0], vars_to_plot):
+            color = SHOCK_COLORS.get(col, "#333333")
+
+            # History
+            hist_vals = history[col]
+            hx = list(range(len(hist_vals)))
+            ax.plot(hx, hist_vals, color=color, linewidth=1.8, label="Historical")
+
+            # Forecast path (full max_horizon)
+            fc_col   = fc[col]
+            fc_point = fc_col["point"]
+            fc_lower = fc_col["lower"]
+            fc_upper = fc_col["upper"]
+            max_h    = len(fc_point)
+
+            offset = len(hist_vals) - 1   # connect forecast to last historical point
+            fx_full = [offset + i for i in range(max_h + 1)]
+            pt_full = [hist_vals[-1]] + fc_point
+            lo_full = [hist_vals[-1]] + fc_lower
+            hi_full = [hist_vals[-1]] + fc_upper
+
+            ax.plot(fx_full, pt_full, color=color, linewidth=1.8,
+                    linestyle="--", label="Forecast (point)")
+            ax.fill_between(fx_full, lo_full, hi_full,
+                            color=color, alpha=0.15, label="95% CI")
+
+            # Vertical markers at 6M and 12M horizons
+            for h in horizons:
+                if h <= max_h:
+                    xh = offset + h
+                    ax.axvline(xh, color=color, linewidth=0.8, linestyle=":")
+                    pt_h = fc_point[h - 1]
+                    ax.annotate(f"+{h}M: {pt_h:+.2f}%",
+                                xy=(xh, pt_h), xytext=(xh + 0.4, pt_h),
+                                fontsize=7.5, color=color, va="center")
+
+            # Divider between history and forecast
+            ax.axvline(offset, color="#6c757d", linewidth=1.0, linestyle="-", alpha=0.5)
+
+            ax.axhline(0, color="#495057", linewidth=0.7, linestyle="--")
+            ax.set_title(title, fontsize=9, fontweight="bold")
+            ax.set_ylabel(ylabel, fontsize=8)
+            ax.grid(axis="y", alpha=0.4)
+
+            # X-axis: show a subset of date labels
+            all_dates = hist_dates + fc_dates
+            tick_step = max(1, len(all_dates) // 10)
+            tick_xs   = list(range(0, len(all_dates), tick_step))
+            ax.set_xticks(tick_xs)
+            ax.set_xticklabels([all_dates[i] for i in tick_xs], rotation=30, fontsize=7)
+            ax.set_xlim(0, len(all_dates) - 1)
+            ax.legend(fontsize=8, framealpha=0.85, loc="upper left")
+
+        fig.tight_layout()
+        fig.savefig(path, dpi=150, bbox_inches="tight")
+        plt.close(fig)
+
+    log.info("SVAR forecast chart saved: %s", path)
+    return path
+
+
 def build_charts() -> list[str]:
     """
     Load JSON results and build all SVAR charts.
     Returns list of saved file paths (empty list if data unavailable).
     """
-    irf_data  = _load_json(SVAR_DIR / "irf_results.json")
-    fevd_data = _load_json(SVAR_DIR / "fevd_results.json")
+    irf_data      = _load_json(SVAR_DIR / "irf_results.json")
+    fevd_data     = _load_json(SVAR_DIR / "fevd_results.json")
+    forecast_data = _load_json(SVAR_DIR / "forecast_results.json")
 
     paths: list[str] = []
 
     if irf_data:
         p = chart_irf_to_cpi(irf_data)
-        if p:
-            paths.append(p)
+        if p: paths.append(p)
         p = chart_irf_fx_all(irf_data)
-        if p:
-            paths.append(p)
+        if p: paths.append(p)
 
     if fevd_data:
         p = chart_fevd_cpi(fevd_data)
-        if p:
-            paths.append(p)
+        if p: paths.append(p)
+
+    if forecast_data:
+        p = chart_forecast(forecast_data)
+        if p: paths.append(p)
 
     log.info("SVAR charts: %d charts saved.", len(paths))
     return paths

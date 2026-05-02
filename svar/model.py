@@ -5,11 +5,12 @@ Fits a reduced-form VAR, identifies structural shocks via Cholesky decomposition
 computes IRFs (24 periods) and FEVD (1, 6, 12, 24 months), and writes JSON results.
 
 Cholesky ordering (most exogenous → most endogenous):
-  1. fx_mom_pct               — exchange rate shock
-  2. emae_yoy_pct             — activity shock
-  3. real_total_credit_yoy_pct— credit shock
-  4. real_wage_yoy_pct        — wage shock
-  5. cpi_mom_pct              — inflation (most endogenous)
+  1. m2_yoy_pct               — monetary policy (M2 private YoY)
+  2. fx_mom_pct               — exchange rate shock
+  3. emae_yoy_pct             — activity shock
+  4. real_total_credit_yoy_pct— credit shock
+  5. real_wage_yoy_pct        — wage shock
+  6. cpi_mom_pct              — inflation (most endogenous)
 """
 
 from __future__ import annotations
@@ -25,16 +26,19 @@ from utils import get_logger
 
 log = get_logger("svar.model")
 
-SVAR_DIR  = Path(__file__).parent.parent / "data" / "svar"
-IRF_FILE  = SVAR_DIR / "irf_results.json"
-FEVD_FILE = SVAR_DIR / "fevd_results.json"
+SVAR_DIR       = Path(__file__).parent.parent / "data" / "svar"
+IRF_FILE       = SVAR_DIR / "irf_results.json"
+FEVD_FILE      = SVAR_DIR / "fevd_results.json"
+FORECAST_FILE  = SVAR_DIR / "forecast_results.json"
 
-IRF_PERIODS   = 24
-FEVD_HORIZONS = [1, 6, 12, 24]
-MAX_LAGS      = 6
-BOOTSTRAP_REPS = 200   # for CI; increase to 500 for publication quality
+IRF_PERIODS       = 24
+FEVD_HORIZONS     = [1, 6, 12, 24]
+FORECAST_HORIZONS = [6, 12]
+MAX_LAGS          = 6
+BOOTSTRAP_REPS    = 200   # for CI; increase to 500 for publication quality
 
 VAR_COLS = [
+    "m2_yoy_pct",
     "fx_mom_pct",
     "emae_yoy_pct",
     "real_total_credit_yoy_pct",
@@ -42,6 +46,7 @@ VAR_COLS = [
     "cpi_mom_pct",
 ]
 VAR_LABELS = {
+    "m2_yoy_pct":                  "M2 growth (monetary policy)",
     "fx_mom_pct":                  "FX shock",
     "emae_yoy_pct":                "Activity shock",
     "real_total_credit_yoy_pct":   "Credit shock",
@@ -98,28 +103,48 @@ def fit_model(df: pd.DataFrame) -> dict | None:
         warnings.simplefilter("ignore")
         irf_analysis = results.irf(IRF_PERIODS)
 
-    # irfs shape: (periods+1, n_vars, n_vars) — irfs[t, impulse, response]
-    irfs = irf_analysis.irfs  # orthogonalized by default
+    # orth_irfs shape: (periods+1, n_vars, n_vars) — orth_irfs[t, response, impulse]
+    irfs = irf_analysis.orth_irfs
 
-    # Bootstrap confidence intervals
+    # Bootstrap confidence intervals — manual residual bootstrap for correctness
     log.info("SVAR model: bootstrap CIs (%d replications)...", BOOTSTRAP_REPS)
-    try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            ci = irf_analysis.errband_mc(
-                orth=True, repl=BOOTSTRAP_REPS, signif=0.05, seed=42
-            )
-        # ci is a tuple (lower, upper), each shape (periods+1, n_vars, n_vars)
-        irf_lower, irf_upper = ci
-    except Exception as exc:
-        log.warning("SVAR model: bootstrap CI failed (%s) — using ±2 asymptotic stderr.", exc)
+    rng   = np.random.default_rng(42)
+    resid = results.resid          # shape (T - p, n_vars)
+    coefs = results.coefs          # shape (p, n_vars, n_vars)
+    intercept = results.intercept  # shape (n_vars,)
+    data_arr  = data.values        # shape (T, n_vars)
+
+    boot_irfs: list[np.ndarray] = []
+    for _ in range(BOOTSTRAP_REPS):
+        idx        = rng.integers(0, len(resid), size=len(resid))
+        boot_resid = resid[idx]
+
+        # Reconstruct bootstrap time series from estimated coefficients + resampled residuals
+        y = np.empty_like(data_arr)
+        y[:lag_order] = data_arr[:lag_order]
+        for t in range(lag_order, len(y)):
+            y[t] = intercept.copy()
+            for lag in range(lag_order):
+                y[t] += coefs[lag] @ y[t - lag - 1]
+            y[t] += boot_resid[t - lag_order]
+
         try:
-            se = np.sqrt(np.abs(irf_analysis.cov()[:, :, :]))
-            se = se.reshape(IRF_PERIODS + 1, n_vars, n_vars)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                b_res = VAR(y).fit(maxlags=lag_order, ic=None, verbose=False)
+                boot_irfs.append(b_res.irf(IRF_PERIODS).orth_irfs)
         except Exception:
-            se = np.zeros_like(irfs)
-        irf_lower = irfs - 2 * se
-        irf_upper = irfs + 2 * se
+            continue
+
+    if len(boot_irfs) >= 10:
+        boot_arr  = np.array(boot_irfs)          # (reps, periods+1, n_vars, n_vars)
+        irf_lower = np.percentile(boot_arr, 2.5,  axis=0)
+        irf_upper = np.percentile(boot_arr, 97.5, axis=0)
+        log.info("SVAR model: bootstrap CIs from %d replications.", len(boot_irfs))
+    else:
+        log.warning("SVAR model: too few bootstrap replications (%d) — CIs set to point estimate.", len(boot_irfs))
+        irf_lower = irfs.copy()
+        irf_upper = irfs.copy()
 
     # Build IRF JSON: for each impulse variable, IRF to CPI (and all responses)
     cpi_idx = cols_avail.index("cpi_mom_pct") if "cpi_mom_pct" in cols_avail else -1
@@ -136,9 +161,9 @@ def fit_model(df: pd.DataFrame) -> dict | None:
         shock: dict = {}
         for resp_idx, resp_col in enumerate(cols_avail):
             shock[resp_col] = {
-                "point":  [round(float(v), 6) for v in irfs[:, imp_idx, resp_idx]],
-                "lower":  [round(float(v), 6) for v in irf_lower[:, imp_idx, resp_idx]],
-                "upper":  [round(float(v), 6) for v in irf_upper[:, imp_idx, resp_idx]],
+                "point":  [round(float(v), 6) for v in irfs[:, resp_idx, imp_idx]],
+                "lower":  [round(float(v), 6) for v in irf_lower[:, resp_idx, imp_idx]],
+                "upper":  [round(float(v), 6) for v in irf_upper[:, resp_idx, imp_idx]],
             }
         irf_json["shocks"][imp_col] = shock
 
@@ -182,4 +207,69 @@ def fit_model(df: pd.DataFrame) -> dict | None:
         for src, share in sorted(fevd_12.items(), key=lambda x: -x[1]):
             log.info("  %-35s  %.1f%%", VAR_LABELS.get(src, src), share)
 
-    return {"irf": irf_json, "fevd": fevd_json}
+    # --- Forecasts ---
+    max_horizon = max(FORECAST_HORIZONS)
+    log.info("SVAR model: computing %d-month forecasts...", max_horizon)
+    try:
+        last_obs = data.values[-lag_order:]   # (p, n_vars) — conditioning observations
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            fc_point = results.forecast(last_obs, steps=max_horizon)
+            _, fc_lower, fc_upper = results.forecast_interval(
+                last_obs, steps=max_horizon, alpha=0.05
+            )
+
+        # Historical tail to provide context in charts (last 24 months)
+        hist_tail = min(24, len(data))
+        history = {
+            col: [round(float(v), 4) for v in data[col].values[-hist_tail:]]
+            for col in cols_avail
+        }
+        history_dates = [d.strftime("%Y-%m") for d in data.index[-hist_tail:]]
+
+        # Date index for forecast periods
+        last_date   = data.index[-1]
+        freq        = pd.tseries.frequencies.to_offset("MS")
+        fc_dates    = [
+            (last_date + freq * (i + 1)).strftime("%Y-%m")
+            for i in range(max_horizon)
+        ]
+
+        forecast_json: dict = {
+            "as_of_date":      last_date.strftime("%Y-%m"),
+            "lag_order":       lag_order,
+            "n_obs":           n_obs,
+            "horizons":        FORECAST_HORIZONS,
+            "variable_names":  cols_avail,
+            "variable_labels": {k: VAR_LABELS.get(k, k) for k in cols_avail},
+            "history_dates":   history_dates,
+            "history":         history,
+            "forecast_dates":  fc_dates,
+            "forecasts":       {},
+        }
+
+        for i, col in enumerate(cols_avail):
+            forecast_json["forecasts"][col] = {
+                "point": [round(float(v), 4) for v in fc_point[:, i]],
+                "lower": [round(float(v), 4) for v in fc_lower[:, i]],
+                "upper": [round(float(v), 4) for v in fc_upper[:, i]],
+            }
+
+        FORECAST_FILE.write_text(json.dumps(forecast_json, indent=2))
+        log.info("SVAR model: forecasts saved -> %s", FORECAST_FILE)
+
+        # Log CPI forecast headline
+        if cpi_idx >= 0:
+            cpi_fc = forecast_json["forecasts"].get("cpi_mom_pct", {})
+            for h in FORECAST_HORIZONS:
+                pt = cpi_fc["point"][h - 1]
+                lo = cpi_fc["lower"][h - 1]
+                hi = cpi_fc["upper"][h - 1]
+                log.info("SVAR model: CPI forecast +%dM  point=%.2f%%  95%% CI [%.2f%%, %.2f%%]",
+                         h, pt, lo, hi)
+
+    except Exception as exc:
+        log.warning("SVAR model: forecast computation failed (%s).", exc)
+        forecast_json = {}
+
+    return {"irf": irf_json, "fevd": fevd_json, "forecast": forecast_json}
