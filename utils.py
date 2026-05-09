@@ -48,6 +48,10 @@ def get_logger(name: str) -> logging.Logger:
 # ---------------------------------------------------------------------------
 # Cache helpers
 # ---------------------------------------------------------------------------
+_CACHE_DATE_KEY = "_cache_date"
+_CACHE_DATA_KEY = "_cache_data"
+
+
 def cache_path(key: str) -> Path:
     """Return the cache file path for a given cache key."""
     safe_key = key.replace("/", "_").replace(":", "_").replace("?", "_").replace("&", "_")
@@ -55,22 +59,40 @@ def cache_path(key: str) -> Path:
 
 
 def load_cache(key: str):
-    """Return cached JSON data if it exists, else None."""
+    """
+    Return cached JSON data if it exists and was saved today.
+
+    Cache files are date-stamped. If the date doesn't match today the entry is
+    treated as a miss so the caller re-fetches fresh data. Old-format files
+    (no date wrapper) are deleted on first read and trigger a re-fetch.
+    """
     p = cache_path(key)
-    if p.exists():
-        try:
-            with open(p, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return None
-    return None
+    if not p.exists():
+        return None
+    try:
+        with open(p, "r", encoding="utf-8") as f:
+            wrapper = json.load(f)
+        if isinstance(wrapper, dict) and _CACHE_DATE_KEY in wrapper:
+            today = datetime.now().strftime("%Y-%m-%d")
+            if wrapper[_CACHE_DATE_KEY] == today:
+                return wrapper[_CACHE_DATA_KEY]
+            return None   # stale — different day, re-fetch
+        # Old format (no date wrapper): delete and re-fetch
+        p.unlink(missing_ok=True)
+        return None
+    except Exception:
+        return None
 
 
 def save_cache(key: str, data) -> None:
-    """Persist JSON data to cache."""
+    """Persist JSON data to cache, stamped with today's date."""
     p = cache_path(key)
+    wrapper = {
+        _CACHE_DATE_KEY: datetime.now().strftime("%Y-%m-%d"),
+        _CACHE_DATA_KEY: data,
+    }
     with open(p, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+        json.dump(wrapper, f, ensure_ascii=False, indent=2)
 
 
 # ---------------------------------------------------------------------------
