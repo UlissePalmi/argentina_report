@@ -3,7 +3,7 @@
 import pandas as pd
 
 from utils import GDP_DIR, get_logger
-from external.client import DatosClient, WorldBankClient, _start
+from .client import DatosClient, WorldBankClient, _start
 
 log = get_logger("fetch.gdp")
 _d  = DatosClient()

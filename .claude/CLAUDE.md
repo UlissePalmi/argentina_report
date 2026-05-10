@@ -26,7 +26,7 @@ To force re-fetch (bypass cache), delete files from `cache/`.
 
 ```
 Layer 1: datos.gob.ar / WB / IMF     →  utils.fetch_json() [cache/]
-Layer 2: external/<topic>.py          →  data/external/*.csv  (and data/<module>/*.csv)
+Layer 2: ingestion/<topic>.py          →  data/external/*.csv  (and data/<module>/*.csv)
 Layer 3: signals/*.py                 →  data/signals/signals_*.json
 Layer 4: .claude/SKILLS/*.md          →  LLM reads signals, writes prose
 Layer 5: report/build.py              →  data/charts/*.png + data/reports/*.pdf
@@ -34,27 +34,27 @@ Layer 5: report/build.py              →  data/charts/*.png + data/reports/*.pd
 
 ### Module structure (Layer 1–2)
 
-`external/fetch.py` is a **re-export hub only** — it imports and re-exports all public functions from the topic modules below. Add new fetch functions to the appropriate topic module, then re-export from `fetch.py` and add to `__all__`. `external/debt.py` is imported directly in `main.py` (not via `fetch.py`).
+Add new fetch functions to the appropriate topic module in `ingestion/`, then import them in `fetch_all.py`.
 
 **BCRAClient is removed.** `api.bcra.gob.ar/estadisticas` is fully deprecated (all v1/v2/v3). All reserve and credit data now comes exclusively from datos.gob.ar.
 
 | Module | Fetches |
 |---|---|
-| `external/client.py` | Shared HTTP clients: `DatosClient`, `WorldBankClient`, `_start()` |
-| `external/reserves.py` | BCRA reserves (datos.gob.ar), exchange rate, current account, trade balance, external debt |
-| `external/fiscal.py` | Monthly IMIG primary + financial balance (ARS bn + % GDP); `_build_gdp_monthly()` for normalisation |
-| `external/debt.py` | Govt external liability breakdown (INDEC IIP quarterly); WB debt service ratios |
-| `external/gdp.py` | GDP growth, expenditure components (real + nominal), EMAE, FBCF breakdown |
-| `external/inflation.py` | INDEC CPI |
-| `external/consumption.py` | Wages, credit (6 categories), deposits; `compute_real_values()` |
-| `external/production.py` | IPI (EMAE industria proxy), oil/gas, ISAC, agriculture |
-| `external/productivity.py` | SIPA employment, UCII (via direct CSV download), productivity + ULC |
+| `ingestion/client.py` | Shared HTTP clients: `DatosClient`, `WorldBankClient`, `_start()` |
+| `ingestion/reserves.py` | BCRA reserves (datos.gob.ar), exchange rate, current account, trade balance, external debt |
+| `ingestion/fiscal.py` | Monthly IMIG primary + financial balance (ARS bn + % GDP); `_build_gdp_monthly()` for normalisation |
+| `ingestion/debt.py` | Govt external liability breakdown (INDEC IIP quarterly); WB debt service ratios |
+| `ingestion/gdp.py` | GDP growth, expenditure components (real + nominal), EMAE, FBCF breakdown |
+| `ingestion/inflation.py` | INDEC CPI |
+| `ingestion/consumption.py` | Wages, credit (6 categories), deposits; `compute_real_values()` |
+| `ingestion/production.py` | IPI (EMAE industria proxy), oil/gas, ISAC, agriculture |
+| `ingestion/productivity.py` | SIPA employment, UCII (via direct CSV download), productivity + ULC |
 
 UCII is fetched by downloading the full INDEC distribution CSV directly (`infra.datos.gob.ar/catalog/sspm/dataset/31/distribution/31.3/...`) because the sector-level series were removed from the datos.gob.ar API.
 
 ### Fiscal % GDP normalisation
 
-`external/fiscal.py::_build_gdp_monthly()` builds the monthly GDP denominator with two sources tried in order:
+`ingestion/fiscal.py::_build_gdp_monthly()` builds the monthly GDP denominator with two sources tried in order:
 
 1. **Primary**: INDEC quarterly nominal GDP (`166.2_PPIB_0_0_3`, datos.gob.ar). Values are **annualized quarterly rates** in millions of ARS current prices (i.e. each quarterly value is already annual-rate; average of four quarters = WB annual figure). Each quarter's value is assigned to its 3 calendar months.
 2. **Fallback**: World Bank `NY.GDP.MKTP.CN` (annual), interpolated monthly.
@@ -141,7 +141,7 @@ Skills are markdown prompts in `.claude/SKILLS/`. They instruct Claude to read s
 
 ## Key conventions
 
-**Real series**: Fisher-adjusted only — `((1 + nominal/100) / (1 + CPI/100) - 1) * 100`. Never simple subtraction. Implemented in `external/consumption.py::compute_real_values()`.
+**Real series**: Fisher-adjusted only — `((1 + nominal/100) / (1 + CPI/100) - 1) * 100`. Never simple subtraction. Implemented in `ingestion/consumption.py::compute_real_values()`.
 
 **GDP share column naming**:
 - `C_share_real`, `G_share_real`, etc. — constant 2004 prices (chain-linked; may not sum to 100%)

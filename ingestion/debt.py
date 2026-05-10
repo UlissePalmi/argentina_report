@@ -19,7 +19,7 @@ Output: data/external/govt_ext_debt.csv
 import pandas as pd
 
 from utils import EXTERNAL_DIR, get_logger
-from external.client import DatosClient, WorldBankClient
+from .client import DatosClient, WorldBankClient
 
 log = get_logger("fetch.debt")
 _d  = DatosClient()
@@ -47,7 +47,7 @@ def fetch_govt_ext_debt(quarters: int = 10) -> pd.DataFrame | None:
     # ------------------------------------------------------------------
     # Step 1: INDEC IIP quarterly — government liabilities by instrument
     # ------------------------------------------------------------------
-    from external.client import _start
+    from .client import _start
     raw = _d.fetch(
         [IIP_TOTAL_ID, IIP_BONDS_ID, IIP_LOANS_ID],
         limit=quarters + 4,

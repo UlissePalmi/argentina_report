@@ -3,7 +3,7 @@
 import pandas as pd
 
 from utils import CONSUMPTION_DIR, get_logger
-from external.client import DatosClient, _start
+from .client import DatosClient, _start
 
 log = get_logger("fetch.consumption")
 _d  = DatosClient()

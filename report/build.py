@@ -16,7 +16,7 @@ import pandas as pd
 from fpdf import FPDF, XPos, YPos
 
 from utils import REPORTS_DIR, SIGNALS_DIR, get_logger
-from external.section              import build_pdf_section as ext_pdf,  build_md_section as ext_md
+from ingestion.section              import build_pdf_section as ext_pdf,  build_md_section as ext_md
 from sections.inflation.section    import build_pdf_section as inf_pdf,  build_md_section as inf_md
 from sections.fiscal.section       import build_pdf_section as fis_pdf,  build_md_section as fis_md
 from sections.gdp.section          import build_pdf_section as gdp_pdf,  build_md_section as gdp_md

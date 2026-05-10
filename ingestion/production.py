@@ -5,7 +5,7 @@ from datetime import date
 import pandas as pd
 
 from utils import PRODUCTION_DIR, get_logger
-from external.client import DatosClient, _start
+from .client import DatosClient, _start
 
 log = get_logger("fetch.production")
 _d  = DatosClient()

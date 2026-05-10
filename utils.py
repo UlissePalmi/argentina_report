@@ -46,7 +46,7 @@ def get_logger(name: str) -> logging.Logger:
 
 
 # ---------------------------------------------------------------------------
-# Cache helpers
+# Cache helpers: save and load .json
 # ---------------------------------------------------------------------------
 _CACHE_DATE_KEY = "_cache_date"
 _CACHE_DATA_KEY = "_cache_data"
@@ -72,13 +72,11 @@ def load_cache(key: str):
     try:
         with open(p, "r", encoding="utf-8") as f:
             wrapper = json.load(f)
+        # Checks if wrapper has a date key and checks if it fetched today
         if isinstance(wrapper, dict) and _CACHE_DATE_KEY in wrapper:
             today = datetime.now().strftime("%Y-%m-%d")
             if wrapper[_CACHE_DATE_KEY] == today:
-                return wrapper[_CACHE_DATA_KEY]
-            return None   # stale — different day, re-fetch
-        # Old format (no date wrapper): delete and re-fetch
-        p.unlink(missing_ok=True)
+                return wrapper[_CACHE_DATA_KEY] 
         return None
     except Exception:
         return None
@@ -96,7 +94,7 @@ def save_cache(key: str, data) -> None:
 
 
 # ---------------------------------------------------------------------------
-# HTTP with retry + caching
+# HTTP GET request: with retry + caching
 # ---------------------------------------------------------------------------
 def fetch_json(
     url: str,
@@ -116,6 +114,7 @@ def fetch_json(
     logger = get_logger("utils.fetch_json")
     key = cache_key or (url + json.dumps(params or {}, sort_keys=True))
 
+    # Checks if the .json is already cached
     cached = load_cache(key)
     if cached is not None:
         logger.debug("Cache hit: %s", key[:80])

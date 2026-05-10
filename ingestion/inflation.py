@@ -1,7 +1,7 @@
 """Inflation: INDEC CPI index, MoM %, and YoY %."""
 
 from utils import INFLATION_DIR, get_logger
-from external.client import DatosClient, _start
+from .client import DatosClient, _start
 
 log = get_logger("fetch.inflation")
 _d  = DatosClient()

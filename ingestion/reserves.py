@@ -8,7 +8,7 @@ import socket
 import pandas as pd
 
 from utils import EXTERNAL_DIR, fetch_json, get_logger
-from external.client import DatosClient, WorldBankClient, _start
+from .client import DatosClient, WorldBankClient, _start
 
 log   = get_logger("fetch.reserves")
 _d    = DatosClient()

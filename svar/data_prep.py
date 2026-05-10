@@ -49,10 +49,10 @@ def _load_extended() -> pd.DataFrame | None:
     at an extended window. Returns None if any fetch fails critically.
     """
     try:
-        from external.inflation   import fetch_cpi
-        from external.reserves    import fetch_exchange_rate, fetch_money_supply
-        from external.consumption import fetch_consumption, compute_real_values
-        from external.gdp         import fetch_emae
+        from ingestion.inflation   import fetch_cpi
+        from ingestion.reserves    import fetch_exchange_rate, fetch_money_supply
+        from ingestion.consumption import fetch_consumption, compute_real_values
+        from ingestion.gdp         import fetch_emae
 
         log.info("SVAR data_prep: fetching extended %d-month history...", TARGET_MONTHS)
 
