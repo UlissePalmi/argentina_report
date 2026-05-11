@@ -44,11 +44,14 @@ FBCF_REAL_SUBCOMP = {
 
 
 def _to_quarter_period(df: pd.DataFrame) -> pd.DataFrame:
-    """Standardise date to quarter period strings (in-place) and add 'quarter' column."""
+    """Standardise date to quarter period strings and add quarter, quarter_start, quarter_end as first cols."""
     period = (df["date"] + pd.offsets.QuarterEnd(0)).dt.to_period("Q")
-    df["date"]    = period.astype(str)
-    df["quarter"] = "Q" + period.dt.quarter.astype(str) + " " + period.dt.year.astype(str)
-    return df
+    df["date"]          = period.astype(str)
+    df["quarter"]       = "Q" + period.dt.quarter.astype(str) + " " + period.dt.year.astype(str)
+    df["quarter_start"] = period.dt.start_time.dt.normalize()
+    df["quarter_end"]   = period.dt.end_time.dt.normalize()
+    other = [c for c in df.columns if c not in ("date", "quarter_start", "quarter_end")]
+    return df[["date", "quarter_start", "quarter_end"] + other]
 
 
 def fetch_gdp_growth(quarters: int = 10) -> pd.DataFrame | None:
@@ -58,8 +61,11 @@ def fetch_gdp_growth(quarters: int = 10) -> pd.DataFrame | None:
     if raw is not None and GDP_ID in raw.columns:
         raw["gdp_growth_pct"] = raw[GDP_ID].pct_change(4) * 100
         raw = raw.dropna(subset=["gdp_growth_pct"]).tail(quarters).reset_index(drop=True)
-        raw["date"] = (raw["date"] + pd.offsets.QuarterEnd(0)).dt.to_period("Q").astype(str)
-        df = raw[["date", "gdp_growth_pct"]]
+        period = (raw["date"] + pd.offsets.QuarterEnd(0)).dt.to_period("Q")
+        raw["date"]          = period.astype(str)
+        raw["quarter_start"] = period.dt.start_time.dt.normalize()
+        raw["quarter_end"]   = period.dt.end_time.dt.normalize()
+        df = raw[["date", "quarter_start", "quarter_end", "gdp_growth_pct"]]
         df.to_csv(GDP_DIR / "wb_gdp_growth.csv", index=False)
         log.info("GDP growth (INDEC quarterly) saved -> wb_gdp_growth.csv  (%d rows)", len(df))
         return df

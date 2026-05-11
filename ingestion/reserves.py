@@ -155,9 +155,13 @@ def fetch_current_account(quarters: int = 10) -> pd.DataFrame | None:
     if raw and "data" in raw and [m for m in raw.get("meta", []) if "field" in m]:
         df = pd.DataFrame(raw["data"], columns=["date", "current_account_usd_m"])
         df["date"] = pd.to_datetime(df["date"])
-        df["date"] = (df["date"] + pd.offsets.QuarterEnd(0)).dt.to_period("Q").astype(str)
+        period = (df["date"] + pd.offsets.QuarterEnd(0)).dt.to_period("Q")
+        df["date"]          = period.astype(str)
+        df["quarter_start"] = period.dt.start_time.dt.normalize()
+        df["quarter_end"]   = period.dt.end_time.dt.normalize()
         df["current_account_usd_bn"] = pd.to_numeric(df["current_account_usd_m"], errors="coerce") / 1_000
-        df = df[["date", "current_account_usd_bn"]].dropna().tail(quarters).reset_index(drop=True)
+        df = df[["date", "quarter_start", "quarter_end", "current_account_usd_bn"]].dropna(subset=["current_account_usd_bn"]).tail(quarters).reset_index(drop=True)
+        # date is already the period string (year_quarter); quarter_start/end are first after it
         if not df.empty:
             df.to_csv(EXTERNAL_DIR / "imf_current_account.csv", index=False)
             log.info("Current account (INDEC quarterly) saved -> imf_current_account.csv  (%d rows)", len(df))

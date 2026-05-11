@@ -3,6 +3,7 @@ Shared API clients — datos.gob.ar, World Bank, BCRA.
 Not called from main.py; imported by the topic fetch modules.
 """
 
+import hashlib
 from datetime import date, timedelta
 
 import pandas as pd
@@ -25,7 +26,9 @@ class DatosClient:
         params: dict = {"ids": ",".join(ids), "format": "json", "limit": limit, "sort": "asc"}
         if start_date: params["start_date"] = start_date
         if frequency:  params["collapse"]   = frequency
-        key = f"datos_{'_'.join(s[:20] for s in ids)}_{limit}_{start_date or ''}_{frequency or ''}"
+        ids_part = "_".join(s[:20] for s in ids)
+        raw_key  = f"datos_{ids_part}_{limit}_{start_date or ''}_{frequency or ''}"
+        key = raw_key if len(raw_key) < 180 else f"datos_{hashlib.md5(raw_key.encode()).hexdigest()}"
         raw = fetch_json(self.URL, params=params, cache_key=key)
         if raw is None or "data" not in raw:
             return None

@@ -7,6 +7,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+import pandas as pd
 import requests
 
 # ---------------------------------------------------------------------------
@@ -43,6 +44,23 @@ logging.basicConfig(
 
 def get_logger(name: str) -> logging.Logger:
     return logging.getLogger(name)
+
+
+# ---------------------------------------------------------------------------
+# Quarter helpers
+# ---------------------------------------------------------------------------
+def add_quarter_cols(df: pd.DataFrame, date_col: str = "date") -> pd.DataFrame:
+    """Add year_quarter, quarter_start, quarter_end as the first three columns."""
+    dates   = pd.to_datetime(df[date_col])
+    quarter = dates.dt.quarter
+    year    = dates.dt.year
+
+    df["year_quarter"]  = year.astype(str) + "Q" + quarter.astype(str)
+    df["quarter_start"] = pd.to_datetime({"year": year, "month": (quarter - 1) * 3 + 1, "day": 1})
+    df["quarter_end"]   = (df["quarter_start"] + pd.offsets.QuarterEnd(1)).dt.normalize()
+
+    other = [c for c in df.columns if c not in ("year_quarter", "quarter_start", "quarter_end")]
+    return df[["year_quarter", "quarter_start", "quarter_end"] + other]
 
 
 # ---------------------------------------------------------------------------
@@ -96,6 +114,7 @@ def save_cache(key: str, data) -> None:
 # ---------------------------------------------------------------------------
 # HTTP GET request: with retry + caching
 # ---------------------------------------------------------------------------
+
 def fetch_json(
     url: str,
     params: dict | None = None,
