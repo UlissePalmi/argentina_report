@@ -12,6 +12,7 @@ from .inflation   import fetch_cpi
 from .consumption import fetch_consumption, compute_real_values
 from .production  import fetch_production, fetch_agriculture
 from .productivity import fetch_employment, fetch_ucii, compute_productivity
+from .debt_pdf     import fetch_all_ede_pdfs
 from utils import get_logger
 
 log = get_logger("pipeline.fetch")
@@ -86,6 +87,11 @@ def fetch_all() -> tuple[dict, list[str]]:
     ext_debt_sector_iip_df = fetch_ext_debt_by_sector_iip(quarters=40)
     if ext_debt_sector_iip_df is None:
         warnings.append("Ext debt by sector (IIP market value): FAILED (non-critical)")
+
+    log.info("[1k/6] Downloading & parsing all INDEC EDE PDFs (Cuadros III.3–III.8)...")
+    ede_pdf_data = fetch_all_ede_pdfs()
+    if not ede_pdf_data:
+        warnings.append("INDEC EDE PDFs: FAILED (non-critical -- pdfplumber may not be installed)")
 
     # ------------------------------------------------------------------
     # GDP
@@ -169,6 +175,12 @@ def fetch_all() -> tuple[dict, list[str]]:
         "govt_domestic_debt_df": domestic_debt_df,
         "ext_debt_sector_df":     ext_debt_sector_df,
         "ext_debt_sector_iip_df": ext_debt_sector_iip_df,
+        "ede_pdf_levels":         ede_pdf_data.get("levels"),
+        "ede_pdf_creditor_types": ede_pdf_data.get("creditor_types"),
+        "ede_pdf_multilateral":   ede_pdf_data.get("multilateral"),
+        "ede_pdf_bonds":          ede_pdf_data.get("bonds"),
+        "ede_pdf_bond_series":    ede_pdf_data.get("bond_series"),
+        "ede_pdf_nonresident":    ede_pdf_data.get("nonresident"),
         "gdp_df":                gdp_df,
         "components_df":         components_df,
         "nominal_df":            nominal_df,
