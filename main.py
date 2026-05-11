@@ -31,6 +31,7 @@ from ingestion.fetch_all          import fetch_all
 from sections.consumption.report    import build_productivity_report
 from sections.financing.report      import build_financing_report
 from sections.debt_reserves.report  import build_debt_reserves_report
+from sections.reserves.report       import build_reserves_report
 from report.build                import build_report
 from svar.run                    import run_svar
 from utils                       import get_logger
@@ -111,6 +112,18 @@ def run_pipeline() -> dict:
     financing_report_path = build_financing_report(consumption_df=data["consumption_df"])
 
     # ------------------------------------------------------------------
+    # Build reserves report
+    # ------------------------------------------------------------------
+    log.info("Building reserves report...")
+    reserves_report_path = build_reserves_report(
+        reserves_df = data["reserves_df"],
+        fx_df       = data["fx_df"],
+        trade_df    = data["trade_df"],
+        ca_df       = data["ca_df"],
+        m2_df       = data.get("m2_df"),
+    )
+
+    # ------------------------------------------------------------------
     # Build main report
     # ------------------------------------------------------------------
     log.info("Building report (PDF + Markdown)...")
@@ -160,6 +173,7 @@ def run_pipeline() -> dict:
     log.info("Productivity report: %s", productivity_report_path)
     log.info("Financing report:    %s", financing_report_path)
     log.info("Debt & reserves:     %s", debt_reserves_report_path)
+    log.info("Reserves report:     %s", reserves_report_path)
 
     check_keys = ["reserves_df", "fx_df", "ca_df", "trade_df", "ext_debt_df",
                   "fiscal_df", "gdp_df", "components_df", "emae_df", "cpi_df", "consumption_df"]

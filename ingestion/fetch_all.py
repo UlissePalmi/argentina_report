@@ -2,7 +2,8 @@
 
 from .reserves    import (fetch_reserves, fetch_exchange_rate,
                            fetch_current_account, fetch_trade_balance,
-                           fetch_external_debt, fetch_current_account_pct_gdp)
+                           fetch_external_debt, fetch_current_account_pct_gdp,
+                           fetch_money_supply)
 from .fiscal      import fetch_fiscal
 from .debt        import (fetch_govt_ext_debt, fetch_domestic_debt_flows,
                            fetch_ext_debt_by_sector, fetch_ext_debt_by_sector_iip)
@@ -46,6 +47,11 @@ def fetch_all() -> tuple[dict, list[str]]:
         ca_df = fetch_current_account_pct_gdp(years=8)
         if ca_df is not None:
             log.info("  -> World Bank CA %%GDP fallback succeeded")
+
+    log.info("[1c2/6] Fetching BCRA M2 money supply...")
+    m2_df = fetch_money_supply(months=36)
+    if m2_df is None:
+        warnings.append("BCRA M2: FAILED (non-critical)")
 
     log.info("[1d/6] Fetching trade balance...")
     trade_df = fetch_trade_balance(months=24)
@@ -167,6 +173,7 @@ def fetch_all() -> tuple[dict, list[str]]:
     data = {
         "reserves_df":           reserves_df,
         "fx_df":                 fx_df,
+        "m2_df":                 m2_df,
         "ca_df":                 ca_df,
         "trade_df":              trade_df,
         "ext_debt_df":           ext_debt_df,

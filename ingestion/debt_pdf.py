@@ -415,19 +415,43 @@ def _parse_one_pdf(pdf_bytes: bytes, url: str) -> dict:
 # Main entry point — all PDFs
 # ---------------------------------------------------------------------------
 
+_EDE_CSVS = {
+    "levels":         "govt_debt_levels.csv",
+    "creditor_types": "govt_debt_creditor_types.csv",
+    "multilateral":   "multilateral_creditors.csv",
+    "bonds":          "govt_debt_bonds_snapshot.csv",
+    "bond_series":    "bonds_nom_vs_market.csv",
+    "nonresident":    "bond_nonresident_pct.csv",
+}
+
+
 def fetch_all_ede_pdfs() -> dict[str, pd.DataFrame | None]:
     """
     Scrape the INDEC page for all bal_*.pdf URLs, download and parse each one,
     and return concatenated multi-quarter DataFrames.
+
+    Fast path: if all output CSVs exist in data/external/, skip scraping and
+    parsing entirely and return the cached DataFrames from disk.
 
     Returns dict with keys:
       levels, creditor_types, multilateral, bonds, bond_series, nonresident
 
     Writes CSVs to data/external/:
       govt_debt_levels.csv, govt_debt_creditor_types.csv,
-      multilateral_creditors.csv, bonds_nom_vs_market.csv,
-      bond_nonresident_pct.csv
+      multilateral_creditors.csv, govt_debt_bonds_snapshot.csv,
+      bonds_nom_vs_market.csv, bond_nonresident_pct.csv
     """
+    # Fast path: core CSVs already written → skip scraping + pdfplumber entirely.
+    # "bonds" snapshot is optional (new file; may not exist from older runs).
+    csv_paths = {k: EXTERNAL_DIR / fname for k, fname in _EDE_CSVS.items()}
+    _core_keys = ("levels", "creditor_types", "multilateral", "bond_series", "nonresident")
+    if all(csv_paths[k].exists() for k in _core_keys):
+        log.info("EDE PDFs already parsed — loading from cached CSVs (delete to re-parse)")
+        result = {k: pd.read_csv(csv_paths[k]) for k in _core_keys}
+        bonds_path = csv_paths["bonds"]
+        result["bonds"] = pd.read_csv(bonds_path) if bonds_path.exists() else None
+        return result
+
     try:
         import pdfplumber  # noqa: F401
     except ImportError:
@@ -492,25 +516,18 @@ def fetch_all_ede_pdfs() -> dict[str, pd.DataFrame | None]:
                  .reset_index(drop=True)) if multi_list else None
     df_bonds  = _concat_dedup(bonds_list)
 
-    if df_levels is not None:
-        df_levels.to_csv(EXTERNAL_DIR / "govt_debt_levels.csv", index=False)
-        log.info("govt_debt_levels.csv written (%d rows)", len(df_levels))
-
-    if df_types is not None:
-        df_types.to_csv(EXTERNAL_DIR / "govt_debt_creditor_types.csv", index=False)
-        log.info("govt_debt_creditor_types.csv written (%d rows)", len(df_types))
-
-    if df_multi is not None:
-        df_multi.to_csv(EXTERNAL_DIR / "multilateral_creditors.csv", index=False)
-        log.info("multilateral_creditors.csv written (%d rows)", len(df_multi))
-
-    if bond_series_df is not None:
-        bond_series_df.to_csv(EXTERNAL_DIR / "bonds_nom_vs_market.csv", index=False)
-        log.info("bonds_nom_vs_market.csv written (%d rows)", len(bond_series_df))
-
-    if nonresident_df is not None:
-        nonresident_df.to_csv(EXTERNAL_DIR / "bond_nonresident_pct.csv", index=False)
-        log.info("bond_nonresident_pct.csv written (%d rows)", len(nonresident_df))
+    for key, df in [
+        ("levels",         df_levels),
+        ("creditor_types", df_types),
+        ("multilateral",   df_multi),
+        ("bonds",          df_bonds),
+        ("bond_series",    bond_series_df),
+        ("nonresident",    nonresident_df),
+    ]:
+        if df is not None:
+            p = EXTERNAL_DIR / _EDE_CSVS[key]
+            df.to_csv(p, index=False)
+            log.info("%s written (%d rows)", p.name, len(df))
 
     return {
         "levels":        df_levels,
