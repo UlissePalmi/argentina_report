@@ -2,7 +2,7 @@
 
 import json
 
-from fpdf import XPos
+from fpdf import XPos, YPos
 
 from utils import SIGNALS_DIR
 from .pdf_base import ArgentinaPDF, _safe

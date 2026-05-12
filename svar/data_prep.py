@@ -82,10 +82,10 @@ def _load_from_csv() -> pd.DataFrame | None:
     base = Path(__file__).parent.parent / "data"
     try:
         cpi_df  = pd.read_csv(base / "inflation/indec_cpi.csv",    parse_dates=["date"])
-        fx_df   = pd.read_csv(base / "external/bcra_fx.csv",       parse_dates=["date"])
+        fx_df   = pd.read_csv(base / "reserves/bcra_fx.csv",       parse_dates=["date"])
         cons_df = pd.read_csv(base / "consumption/consumption.csv", parse_dates=["date"])
         emae_df = pd.read_csv(base / "gdp/emae.csv",               parse_dates=["date"])
-        m2_path = base / "external/bcra_m2.csv"
+        m2_path = base / "reserves/bcra_m2.csv"
         m2_df   = pd.read_csv(m2_path, parse_dates=["date"]) if m2_path.exists() else None
         return _assemble(cpi_df, fx_df, cons_df, emae_df, m2_df)
     except Exception as exc:

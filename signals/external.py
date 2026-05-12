@@ -13,7 +13,7 @@ import json
 
 import pandas as pd
 
-from utils import EXTERNAL_DIR, SIGNALS_DIR, get_logger
+from utils import EXTERNAL_DIR, RESERVES_DIR, SIGNALS_DIR, get_logger
 
 log = get_logger("signals.external")
 
@@ -21,11 +21,11 @@ OUT_FILE = SIGNALS_DIR / "signals_external.json"
 
 
 def compute() -> dict:
-    reserves_df = _read_csv("bcra_reserves.csv")
-    ca_df       = _read_csv("imf_current_account.csv")
-    trade_df    = _read_csv("indec_trade.csv")
-    fx_df       = _read_csv("bcra_fx.csv")
-    fiscal_df   = _read_csv("fiscal_balance.csv")
+    reserves_df = _read_csv("bcra_reserves.csv",      RESERVES_DIR)
+    ca_df       = _read_csv("imf_current_account.csv", RESERVES_DIR)
+    trade_df    = _read_csv("indec_trade.csv",         RESERVES_DIR)
+    fx_df       = _read_csv("bcra_fx.csv",             RESERVES_DIR)
+    fiscal_df   = _read_csv("fiscal_balance.csv",      EXTERNAL_DIR)
 
     metrics = {}
     flags   = []
@@ -278,8 +278,8 @@ def _make_summary(gross, net, ca, trade, trend) -> str:
     return "; ".join(parts) + "." if parts else "External data unavailable."
 
 
-def _read_csv(filename: str) -> pd.DataFrame | None:
-    path = EXTERNAL_DIR / filename
+def _read_csv(filename: str, base_dir=None) -> pd.DataFrame | None:
+    path = (base_dir or EXTERNAL_DIR) / filename
     if not path.exists():
         log.warning("%s not found", filename)
         return None

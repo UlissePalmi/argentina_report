@@ -39,7 +39,7 @@ from utils                       import get_logger
 log = get_logger("main")
 
 
-def run_pipeline() -> dict:
+def run_pipeline(no_pdf: bool = False) -> dict:
     log.info("=" * 60)
     log.info("Argentina Macro Report Pipeline -- starting")
     log.info("=" * 60)
@@ -73,95 +73,104 @@ def run_pipeline() -> dict:
     log.info("Running SVAR inflation dynamics model...")
     run_svar()
 
-    # ------------------------------------------------------------------
-    # Build productivity deep-dive report
-    # ------------------------------------------------------------------
-    log.info("Building productivity deep-dive report...")
-    productivity_report_path = build_productivity_report(
-        consumption_df=data["consumption_df"],
-        cpi_df=data["cpi_df"],
-        components_df=data["components_df"],
-        nominal_df=data["nominal_df"],
-        fbcf_df=data["fbcf_df"],
-        emae_df=data["emae_df"],
-        production_df=data["production_df"],
-        agro_df=data["agro_df"],
-        productivity_df=data["productivity_df"],
-        ucii_df=data["ucii_df"],
-        employment_df=data["employment_df"],
-    )
+    productivity_report_path = None
+    debt_reserves_report_path = None
+    financing_report_path = None
+    reserves_report_path = None
+    report_path = {"pdf": None, "md": None}
 
-    # ------------------------------------------------------------------
-    # Build debt & reserves report
-    # ------------------------------------------------------------------
-    log.info("Building debt & reserves report...")
-    debt_reserves_report_path = build_debt_reserves_report(
-        reserves_df=            data["reserves_df"],
-        fx_df=                  data["fx_df"],
-        ext_debt_sector_df=     data["ext_debt_sector_df"],
-        ext_debt_sector_iip_df= data["ext_debt_sector_iip_df"],
-        govt_ext_debt_df=       data["govt_external_debt_df"],
-        trade_df=               data["trade_df"],
-        ca_df=                  data["ca_df"],
-    )
+    if no_pdf:
+        log.info("--no-pdf: skipping all report generation.")
+    else:
+        # ------------------------------------------------------------------
+        # Build productivity deep-dive report
+        # ------------------------------------------------------------------
+        log.info("Building productivity deep-dive report...")
+        productivity_report_path = build_productivity_report(
+            consumption_df=data["consumption_df"],
+            cpi_df=data["cpi_df"],
+            components_df=data["components_df"],
+            nominal_df=data["nominal_df"],
+            fbcf_df=data["fbcf_df"],
+            emae_df=data["emae_df"],
+            production_df=data["production_df"],
+            agro_df=data["agro_df"],
+            productivity_df=data["productivity_df"],
+            ucii_df=data["ucii_df"],
+            employment_df=data["employment_df"],
+        )
 
-    # ------------------------------------------------------------------
-    # Build financing report
-    # ------------------------------------------------------------------
-    log.info("Building financing report...")
-    financing_report_path = build_financing_report(consumption_df=data["consumption_df"])
+        # ------------------------------------------------------------------
+        # Build debt & reserves report
+        # ------------------------------------------------------------------
+        log.info("Building debt & reserves report...")
+        debt_reserves_report_path = build_debt_reserves_report(
+            reserves_df=            data["reserves_df"],
+            fx_df=                  data["fx_df"],
+            ext_debt_sector_df=     data["ext_debt_sector_df"],
+            ext_debt_sector_iip_df= data["ext_debt_sector_iip_df"],
+            govt_ext_debt_df=       data["govt_external_debt_df"],
+            trade_df=               data["trade_df"],
+            ca_df=                  data["ca_df"],
+        )
 
-    # ------------------------------------------------------------------
-    # Build reserves report
-    # ------------------------------------------------------------------
-    log.info("Building reserves report...")
-    reserves_report_path = build_reserves_report(
-        reserves_df = data["reserves_df"],
-        fx_df       = data["fx_df"],
-        trade_df    = data["trade_df"],
-        ca_df       = data["ca_df"],
-        m2_df       = data.get("m2_df"),
-    )
+        # ------------------------------------------------------------------
+        # Build financing report
+        # ------------------------------------------------------------------
+        log.info("Building financing report...")
+        financing_report_path = build_financing_report(consumption_df=data["consumption_df"])
 
-    # ------------------------------------------------------------------
-    # Build main report
-    # ------------------------------------------------------------------
-    log.info("Building report (PDF + Markdown)...")
-    report_path = build_report(
-        external_data={
-            "trade_df":    data["trade_df"],
-            "reserves_df": data["reserves_df"],
-            "ca_df":       data["ca_df"],
-            "fx_df":       data["fx_df"],
-        },
-        inflation_data={
-            "cpi_df": data["cpi_df"],
-        },
-        fiscal_data={
-            "fiscal_df": data["fiscal_df"],
-        },
-        debt_data={
-            "debt_df": data["govt_external_debt_df"],
-        },
-        gdp_data={
-            "gdp_df":        data["gdp_df"],
-            "components_df": data["components_df"],
-            "nominal_df":    data["nominal_df"],
-            "fbcf_df":       data["fbcf_df"],
-            "emae_df":       data["emae_df"],
-        },
-        labor_data={
-            "consumption_df": data["consumption_df"],
-            "employment_df":  data["employment_df"],
-        },
-        production_data={
-            "production_df": data["production_df"],
-            "agro_df":       data["agro_df"],
-        },
-        consumption_data={
-            "consumption_df": data["consumption_df"],
-        },
-    )
+        # ------------------------------------------------------------------
+        # Build reserves report
+        # ------------------------------------------------------------------
+        log.info("Building reserves report...")
+        reserves_report_path = build_reserves_report(
+            reserves_df = data["reserves_df"],
+            fx_df       = data["fx_df"],
+            trade_df    = data["trade_df"],
+            ca_df       = data["ca_df"],
+            m2_df       = data.get("m2_df"),
+        )
+
+        # ------------------------------------------------------------------
+        # Build main report
+        # ------------------------------------------------------------------
+        log.info("Building report (PDF + Markdown)...")
+        report_path = build_report(
+            external_data={
+                "trade_df":    data["trade_df"],
+                "reserves_df": data["reserves_df"],
+                "ca_df":       data["ca_df"],
+                "fx_df":       data["fx_df"],
+            },
+            inflation_data={
+                "cpi_df": data["cpi_df"],
+            },
+            fiscal_data={
+                "fiscal_df": data["fiscal_df"],
+            },
+            debt_data={
+                "debt_df": data["govt_external_debt_df"],
+            },
+            gdp_data={
+                "gdp_df":        data["gdp_df"],
+                "components_df": data["components_df"],
+                "nominal_df":    data["nominal_df"],
+                "fbcf_df":       data["fbcf_df"],
+                "emae_df":       data["emae_df"],
+            },
+            labor_data={
+                "consumption_df": data["consumption_df"],
+                "employment_df":  data["employment_df"],
+            },
+            production_data={
+                "production_df": data["production_df"],
+                "agro_df":       data["agro_df"],
+            },
+            consumption_data={
+                "consumption_df": data["consumption_df"],
+            },
+        )
 
     # ------------------------------------------------------------------
     # Summary
@@ -196,6 +205,7 @@ def run_pipeline() -> dict:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--refresh", action="store_true", help="Clear cache before running to force re-fetch")
+    parser.add_argument("--no-pdf", action="store_true", help="Skip PDF/report generation (data fetch + signals + SVAR only)")
     args = parser.parse_args()
 
     if args.refresh:
@@ -205,7 +215,7 @@ if __name__ == "__main__":
         print("Cache cleared.")
 
     try:
-        paths = run_pipeline()
+        paths = run_pipeline(no_pdf=args.no_pdf)
         print(f"\nPDF:                {paths['pdf']}")
         print(f"Markdown:           {paths['md']}")
         print(f"Productivity report: {paths.get('productivity_report', 'n/a')}")
