@@ -55,5 +55,14 @@ class WorldBankClient:
         return pd.DataFrame(rows).sort_values("date").reset_index(drop=True) if rows else None
 
 
+def to_monthly_last(raw: pd.DataFrame, value_col: str) -> pd.DataFrame:
+    """Collapse a daily series to last-of-month."""
+    raw = raw.copy()
+    raw["month"] = raw["date"].dt.to_period("M")
+    df = raw.groupby("month", as_index=False).last()
+    df["date"] = df["month"].dt.to_timestamp()
+    return df[["date", value_col]].copy()
+
+
 # BCRAClient removed -- api.bcra.gob.ar/estadisticas deprecated all versions (v1/v2/v3).
 # Reserves and credit data now sourced exclusively from datos.gob.ar.

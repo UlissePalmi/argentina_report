@@ -1,9 +1,9 @@
 """Layer-2 orchestrator: fetches all data sources and returns DataFrames + warnings."""
 
-from .reserves    import (fetch_reserves, fetch_exchange_rate,
-                           fetch_current_account, fetch_trade_balance,
+from .reserves    import fetch_reserves, fetch_bcra_balance_sheet
+from .external    import (fetch_current_account, fetch_trade_balance,
                            fetch_external_debt, fetch_current_account_pct_gdp,
-                           fetch_money_supply, fetch_reserves_breakdown)
+                           fetch_money_supply, fetch_exchange_rate)
 from .fiscal      import fetch_fiscal
 from .debt        import (fetch_govt_ext_debt, fetch_domestic_debt_flows,
                            fetch_ext_debt_by_sector, fetch_ext_debt_by_sector_iip)
@@ -35,8 +35,10 @@ def fetch_all() -> tuple[dict, list[str]]:
     if reserves_df is None:
         warnings.append("BCRA reserves: FAILED -- check api.bcra.gob.ar")
 
-    log.info("[1a2/6] Fetching BCRA reserves breakdown...")
-    fetch_reserves_breakdown()   # best-effort; result not surfaced to pipeline dict
+    log.info("[1a2/6] Fetching BCRA balance sheet (weekly PDF snapshot)...")
+    bcra_bs = fetch_bcra_balance_sheet()  # best-effort; saves bcra_balance_sheet.csv
+    if bcra_bs is None:
+        warnings.append("BCRA balance sheet PDF: FAILED (non-critical)")
 
     log.info("[1b/6] Fetching BCRA exchange rate...")
     fx_df = fetch_exchange_rate(months=24)
