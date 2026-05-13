@@ -206,6 +206,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--refresh", action="store_true", help="Clear cache before running to force re-fetch")
     parser.add_argument("--no-pdf", action="store_true", help="Skip PDF/report generation (data fetch + signals + SVAR only)")
+    parser.add_argument("--data-only", action="store_true", help="Fetch and save CSVs only — skip signals, SVAR, and reports")
     args = parser.parse_args()
 
     if args.refresh:
@@ -213,6 +214,12 @@ if __name__ == "__main__":
         shutil.rmtree(CACHE_DIR, ignore_errors=True)
         CACHE_DIR.mkdir(exist_ok=True)
         print("Cache cleared.")
+
+    if args.data_only:
+        data, warnings = fetch_all()
+        for w in warnings:
+            log.warning("  * %s", w)
+        sys.exit(0)
 
     try:
         paths = run_pipeline(no_pdf=args.no_pdf)

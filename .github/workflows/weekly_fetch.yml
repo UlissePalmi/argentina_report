@@ -28,7 +28,7 @@ jobs:
         run: uv sync
 
       - name: Fetch data
-        run: uv run python main.py --no-pdf
+        run: uv run python main.py --data-only
 
       - name: Commit new data
         run: |

@@ -1,0 +1,81 @@
+date,category,label,usd_bn,is_liquid,note
+2024-03-01,colocaciones,Investable foreign currency placements,6.144,True,"US Treasuries, foreign sovereign bonds, and term deposits at foreign banks; liquid but with settlement lag"
+2024-03-01,derivatives,Derivative instruments,0.034,False,Net mark-to-market of FX forwards and other derivatives; typically a small negative
+2024-03-01,divisas,Foreign currency deposits,16.781,True,"Spot deposits at BIS, US Fed, IMF (incl. SDR holdings and IMF reserve tranche); most liquid tier of reserves"
+2024-03-01,gold_net,Monetary gold (net),4.378,False,"Physical gold at market value, net of fineness-purity provision; deployable only via repo or sale"
+2024-04-01,colocaciones,Investable foreign currency placements,8.787,True,"US Treasuries, foreign sovereign bonds, and term deposits at foreign banks; liquid but with settlement lag"
+2024-04-01,derivatives,Derivative instruments,-0.006,False,Net mark-to-market of FX forwards and other derivatives; typically a small negative
+2024-04-01,divisas,Foreign currency deposits,14.473,True,"Spot deposits at BIS, US Fed, IMF (incl. SDR holdings and IMF reserve tranche); most liquid tier of reserves"
+2024-04-01,gold_net,Monetary gold (net),4.599,False,"Physical gold at market value, net of fineness-purity provision; deployable only via repo or sale"
+2024-05-01,colocaciones,Investable foreign currency placements,8.505,True,"US Treasuries, foreign sovereign bonds, and term deposits at foreign banks; liquid but with settlement lag"
+2024-05-01,derivatives,Derivative instruments,-0.024,False,Net mark-to-market of FX forwards and other derivatives; typically a small negative
+2024-05-01,divisas,Foreign currency deposits,15.821,True,"Spot deposits at BIS, US Fed, IMF (incl. SDR holdings and IMF reserve tranche); most liquid tier of reserves"
+2024-05-01,gold_net,Monetary gold (net),4.662,False,"Physical gold at market value, net of fineness-purity provision; deployable only via repo or sale"
+2024-06-01,colocaciones,Investable foreign currency placements,7.936,True,"US Treasuries, foreign sovereign bonds, and term deposits at foreign banks; liquid but with settlement lag"
+2024-06-01,derivatives,Derivative instruments,0.055,False,Net mark-to-market of FX forwards and other derivatives; typically a small negative
+2024-06-01,divisas,Foreign currency deposits,16.633,True,"Spot deposits at BIS, US Fed, IMF (incl. SDR holdings and IMF reserve tranche); most liquid tier of reserves"
+2024-06-01,gold_net,Monetary gold (net),4.659,False,"Physical gold at market value, net of fineness-purity provision; deployable only via repo or sale"
+2024-07-01,colocaciones,Investable foreign currency placements,6.668,True,"US Treasuries, foreign sovereign bonds, and term deposits at foreign banks; liquid but with settlement lag"
+2024-07-01,derivatives,Derivative instruments,0.027,False,Net mark-to-market of FX forwards and other derivatives; typically a small negative
+2024-07-01,divisas,Foreign currency deposits,15.109,True,"Spot deposits at BIS, US Fed, IMF (incl. SDR holdings and IMF reserve tranche); most liquid tier of reserves"
+2024-07-01,gold_net,Monetary gold (net),4.853,False,"Physical gold at market value, net of fineness-purity provision; deployable only via repo or sale"
+2024-08-01,colocaciones,Investable foreign currency placements,5.69,True,"US Treasuries, foreign sovereign bonds, and term deposits at foreign banks; liquid but with settlement lag"
+2024-08-01,derivatives,Derivative instruments,0.045,False,Net mark-to-market of FX forwards and other derivatives; typically a small negative
+2024-08-01,divisas,Foreign currency deposits,16.251,True,"Spot deposits at BIS, US Fed, IMF (incl. SDR holdings and IMF reserve tranche); most liquid tier of reserves"
+2024-08-01,gold_net,Monetary gold (net),5.013,False,"Physical gold at market value, net of fineness-purity provision; deployable only via repo or sale"
+2024-09-01,colocaciones,Investable foreign currency placements,4.883,True,"US Treasuries, foreign sovereign bonds, and term deposits at foreign banks; liquid but with settlement lag"
+2024-09-01,derivatives,Derivative instruments,0.042,False,Net mark-to-market of FX forwards and other derivatives; typically a small negative
+2024-09-01,divisas,Foreign currency deposits,17.214,True,"Spot deposits at BIS, US Fed, IMF (incl. SDR holdings and IMF reserve tranche); most liquid tier of reserves"
+2024-09-01,gold_net,Monetary gold (net),5.283,False,"Physical gold at market value, net of fineness-purity provision; deployable only via repo or sale"
+2024-10-01,colocaciones,Investable foreign currency placements,6.105,True,"US Treasuries, foreign sovereign bonds, and term deposits at foreign banks; liquid but with settlement lag"
+2024-10-01,derivatives,Derivative instruments,-0.009,False,Net mark-to-market of FX forwards and other derivatives; typically a small negative
+2024-10-01,divisas,Foreign currency deposits,17.303,True,"Spot deposits at BIS, US Fed, IMF (incl. SDR holdings and IMF reserve tranche); most liquid tier of reserves"
+2024-10-01,gold_net,Monetary gold (net),5.488,False,"Physical gold at market value, net of fineness-purity provision; deployable only via repo or sale"
+2024-11-01,colocaciones,Investable foreign currency placements,6.673,True,"US Treasuries, foreign sovereign bonds, and term deposits at foreign banks; liquid but with settlement lag"
+2024-11-01,derivatives,Derivative instruments,-0.048,False,Net mark-to-market of FX forwards and other derivatives; typically a small negative
+2024-11-01,divisas,Foreign currency deposits,18.568,True,"Spot deposits at BIS, US Fed, IMF (incl. SDR holdings and IMF reserve tranche); most liquid tier of reserves"
+2024-11-01,gold_net,Monetary gold (net),5.332,False,"Physical gold at market value, net of fineness-purity provision; deployable only via repo or sale"
+2024-12-01,colocaciones,Investable foreign currency placements,5.477,True,"US Treasuries, foreign sovereign bonds, and term deposits at foreign banks; liquid but with settlement lag"
+2024-12-01,derivatives,Derivative instruments,0.053,False,Net mark-to-market of FX forwards and other derivatives; typically a small negative
+2024-12-01,divisas,Foreign currency deposits,19.158,True,"Spot deposits at BIS, US Fed, IMF (incl. SDR holdings and IMF reserve tranche); most liquid tier of reserves"
+2024-12-01,gold_net,Monetary gold (net),5.26,False,"Physical gold at market value, net of fineness-purity provision; deployable only via repo or sale"
+2025-01-01,colocaciones,Investable foreign currency placements,6.742,True,"US Treasuries, foreign sovereign bonds, and term deposits at foreign banks; liquid but with settlement lag"
+2025-01-01,derivatives,Derivative instruments,-0.023,False,Net mark-to-market of FX forwards and other derivatives; typically a small negative
+2025-01-01,divisas,Foreign currency deposits,16.25,True,"Spot deposits at BIS, US Fed, IMF (incl. SDR holdings and IMF reserve tranche); most liquid tier of reserves"
+2025-01-01,gold_net,Monetary gold (net),5.63,False,"Physical gold at market value, net of fineness-purity provision; deployable only via repo or sale"
+2025-02-01,colocaciones,Investable foreign currency placements,5.843,True,"US Treasuries, foreign sovereign bonds, and term deposits at foreign banks; liquid but with settlement lag"
+2025-02-01,derivatives,Derivative instruments,0.003,False,Net mark-to-market of FX forwards and other derivatives; typically a small negative
+2025-02-01,divisas,Foreign currency deposits,16.759,True,"Spot deposits at BIS, US Fed, IMF (incl. SDR holdings and IMF reserve tranche); most liquid tier of reserves"
+2025-02-01,gold_net,Monetary gold (net),5.68,False,"Physical gold at market value, net of fineness-purity provision; deployable only via repo or sale"
+2025-03-01,colocaciones,Investable foreign currency placements,1.842,True,"US Treasuries, foreign sovereign bonds, and term deposits at foreign banks; liquid but with settlement lag"
+2025-03-01,derivatives,Derivative instruments,-0.159,False,Net mark-to-market of FX forwards and other derivatives; typically a small negative
+2025-03-01,divisas,Foreign currency deposits,17.206,True,"Spot deposits at BIS, US Fed, IMF (incl. SDR holdings and IMF reserve tranche); most liquid tier of reserves"
+2025-03-01,gold_net,Monetary gold (net),6.217,False,"Physical gold at market value, net of fineness-purity provision; deployable only via repo or sale"
+2025-04-01,colocaciones,Investable foreign currency placements,7.597,True,"US Treasuries, foreign sovereign bonds, and term deposits at foreign banks; liquid but with settlement lag"
+2025-04-01,derivatives,Derivative instruments,-0.114,False,Net mark-to-market of FX forwards and other derivatives; typically a small negative
+2025-04-01,divisas,Foreign currency deposits,26.255,True,"Spot deposits at BIS, US Fed, IMF (incl. SDR holdings and IMF reserve tranche); most liquid tier of reserves"
+2025-04-01,gold_net,Monetary gold (net),6.838,False,"Physical gold at market value, net of fineness-purity provision; deployable only via repo or sale"
+2025-05-01,colocaciones,Investable foreign currency placements,8.189,True,"US Treasuries, foreign sovereign bonds, and term deposits at foreign banks; liquid but with settlement lag"
+2025-05-01,derivatives,Derivative instruments,-0.118,False,Net mark-to-market of FX forwards and other derivatives; typically a small negative
+2025-05-01,divisas,Foreign currency deposits,23.534,True,"Spot deposits at BIS, US Fed, IMF (incl. SDR holdings and IMF reserve tranche); most liquid tier of reserves"
+2025-05-01,gold_net,Monetary gold (net),6.794,False,"Physical gold at market value, net of fineness-purity provision; deployable only via repo or sale"
+2025-06-01,colocaciones,Investable foreign currency placements,8.86,True,"US Treasuries, foreign sovereign bonds, and term deposits at foreign banks; liquid but with settlement lag"
+2025-06-01,derivatives,Derivative instruments,-0.038,False,Net mark-to-market of FX forwards and other derivatives; typically a small negative
+2025-06-01,divisas,Foreign currency deposits,24.983,True,"Spot deposits at BIS, US Fed, IMF (incl. SDR holdings and IMF reserve tranche); most liquid tier of reserves"
+2025-06-01,gold_net,Monetary gold (net),6.608,False,"Physical gold at market value, net of fineness-purity provision; deployable only via repo or sale"
+2025-07-01,colocaciones,Investable foreign currency placements,10.226,True,"US Treasuries, foreign sovereign bonds, and term deposits at foreign banks; liquid but with settlement lag"
+2025-07-01,derivatives,Derivative instruments,0.128,False,Net mark-to-market of FX forwards and other derivatives; typically a small negative
+2025-07-01,divisas,Foreign currency deposits,24.153,True,"Spot deposits at BIS, US Fed, IMF (incl. SDR holdings and IMF reserve tranche); most liquid tier of reserves"
+2025-07-01,gold_net,Monetary gold (net),6.98,False,"Physical gold at market value, net of fineness-purity provision; deployable only via repo or sale"
+2025-08-01,colocaciones,Investable foreign currency placements,11.0,True,"US Treasuries, foreign sovereign bonds, and term deposits at foreign banks; liquid but with settlement lag"
+2025-08-01,derivatives,Derivative instruments,-0.073,False,Net mark-to-market of FX forwards and other derivatives; typically a small negative
+2025-08-01,divisas,Foreign currency deposits,22.104,True,"Spot deposits at BIS, US Fed, IMF (incl. SDR holdings and IMF reserve tranche); most liquid tier of reserves"
+2025-08-01,gold_net,Monetary gold (net),6.81,False,"Physical gold at market value, net of fineness-purity provision; deployable only via repo or sale"
+2025-09-01,colocaciones,Investable foreign currency placements,9.58,True,"US Treasuries, foreign sovereign bonds, and term deposits at foreign banks; liquid but with settlement lag"
+2025-09-01,derivatives,Derivative instruments,-0.404,False,Net mark-to-market of FX forwards and other derivatives; typically a small negative
+2025-09-01,divisas,Foreign currency deposits,22.76,True,"Spot deposits at BIS, US Fed, IMF (incl. SDR holdings and IMF reserve tranche); most liquid tier of reserves"
+2025-09-01,gold_net,Monetary gold (net),7.44,False,"Physical gold at market value, net of fineness-purity provision; deployable only via repo or sale"
+2025-10-01,colocaciones,Investable foreign currency placements,9.322,True,"US Treasuries, foreign sovereign bonds, and term deposits at foreign banks; liquid but with settlement lag"
+2025-10-01,derivatives,Derivative instruments,-0.17,False,Net mark-to-market of FX forwards and other derivatives; typically a small negative
+2025-10-01,divisas,Foreign currency deposits,22.418,True,"Spot deposits at BIS, US Fed, IMF (incl. SDR holdings and IMF reserve tranche); most liquid tier of reserves"
+2025-10-01,gold_net,Monetary gold (net),7.965,False,"Physical gold at market value, net of fineness-purity provision; deployable only via repo or sale"
