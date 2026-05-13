@@ -1,14 +1,16 @@
 """
-Shared API clients — datos.gob.ar, World Bank, BCRA.
+Shared API clients — datos.gob.ar, World Bank, PDF.
 Not called from main.py; imported by the topic fetch modules.
 """
 
 import hashlib
+import io
+import re
 from datetime import date, timedelta
 
 import pandas as pd
 
-from utils import fetch_json
+from utils import fetch_json, get_logger, load_cache, save_cache
 
 
 def _start(months: int, buffer: int = 14) -> str:
@@ -66,3 +68,72 @@ def to_monthly_last(raw: pd.DataFrame, value_col: str) -> pd.DataFrame:
 
 # BCRAClient removed -- api.bcra.gob.ar/estadisticas deprecated all versions (v1/v2/v3).
 # Reserves and credit data now sourced exclusively from datos.gob.ar.
+
+
+class PdfClient:
+    """Download, cache, and extract content from remote PDFs."""
+
+    DEFAULT_HEADERS = {"User-Agent": "Mozilla/5.0"}
+
+    def __init__(self, timeout: int = 60, headers: dict | None = None):
+        self.timeout = timeout
+        self.headers = headers or self.DEFAULT_HEADERS
+        self.log = get_logger("pdf_client")
+
+    def fetch_bytes(self, url: str, cache_key: str | None = None) -> bytes | None:
+        """Download PDF bytes, optionally caching as hex so re-runs skip the download."""
+        if cache_key:
+            cached = load_cache(cache_key)
+            if cached:
+                try:
+                    return bytes.fromhex(cached)
+                except Exception:
+                    pass
+
+        try:
+            import requests
+            resp = requests.get(url, timeout=self.timeout, headers=self.headers)
+            resp.raise_for_status()
+            if cache_key:
+                save_cache(cache_key, resp.content.hex())
+            return resp.content
+        except Exception as e:
+            self.log.warning("PDF download failed (%s): %s", url, e)
+            return None
+
+    def extract_text(self, pdf_bytes: bytes, pages: list[int] | None = None) -> str | None:
+        """Extract full text from PDF bytes. Pass page indices to restrict to specific pages."""
+        try:
+            import pdfplumber
+            with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+                page_list = [pdf.pages[i] for i in pages] if pages else pdf.pages
+                return "\n".join(p.extract_text() or "" for p in page_list)
+        except Exception as e:
+            self.log.warning("PDF text extraction failed: %s", e)
+            return None
+
+    def extract_tables(self, pdf_bytes: bytes, page: int = 0) -> list:
+        """Extract all tables from a single page (0-indexed)."""
+        try:
+            import pdfplumber
+            with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+                return pdf.pages[page].extract_tables() or []
+        except Exception as e:
+            self.log.warning("PDF table extraction failed (page %d): %s", page, e)
+            return []
+
+    def find(self, text: str, pattern: str, flags: int = 0,
+             warn: str | None = None) -> re.Match | None:
+        """Search text for pattern; log a warning and return None if not found."""
+        m = re.search(pattern, text, flags)
+        if m is None and warn:
+            self.log.warning(warn)
+        return m
+
+    def fetch_text(self, url: str, cache_key: str | None = None,
+                   pages: list[int] | None = None) -> str | None:
+        """Convenience: download + extract text in one call."""
+        pdf_bytes = self.fetch_bytes(url, cache_key)
+        if pdf_bytes is None:
+            return None
+        return self.extract_text(pdf_bytes, pages)
