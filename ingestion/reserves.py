@@ -78,7 +78,7 @@ def fetch_bcra_balance_sheet() -> dict | None:
 
     url = "https://www.bcra.gob.ar/archivos/Pdfs/PublicacionesEstadisticas/econ0200.pdf"
     try:
-        resp = requests.get(url, timeout=30)
+        resp = requests.get(url, timeout=30, headers={"User-Agent": "Mozilla/5.0"})
         resp.raise_for_status()
         pdf_bytes = io.BytesIO(resp.content)
     except Exception as e:
