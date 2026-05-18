@@ -9,7 +9,7 @@ from .debt        import (fetch_govt_ext_debt, fetch_domestic_debt_flows,
                            fetch_ext_debt_by_sector, fetch_ext_debt_by_sector_iip)
 from .gdp         import (fetch_gdp_growth, fetch_gdp_components, fetch_emae,
                            fetch_gdp_nominal, fetch_fbcf_breakdown)
-from .inflation   import fetch_cpi
+from .inflation   import fetch_cpi, fetch_cpi_by_division, fetch_cpi_by_category
 from .consumption import fetch_consumption, compute_real_values
 from .production  import fetch_production, fetch_agriculture
 from .productivity import fetch_employment, fetch_ucii, compute_productivity
@@ -132,6 +132,16 @@ def fetch_all() -> tuple[dict, list[str]]:
     if cpi_df is None:
         warnings.append("INDEC CPI: FAILED -- datos.gob.ar may be down")
 
+    log.info("[3b/6] Fetching INDEC CPI by division (12 chapters)...")
+    cpi_div_df = fetch_cpi_by_division(months=36)
+    if cpi_div_df is None:
+        warnings.append("INDEC CPI by division: FAILED (non-critical)")
+
+    log.info("[3c/6] Fetching INDEC CPI by category (core/regulated/seasonal)...")
+    cpi_cat_df = fetch_cpi_by_category(months=36)
+    if cpi_cat_df is None:
+        warnings.append("INDEC CPI by category: FAILED (non-critical)")
+
     # ------------------------------------------------------------------
     # Consumption drivers
     # ------------------------------------------------------------------
@@ -199,6 +209,8 @@ def fetch_all() -> tuple[dict, list[str]]:
         "fbcf_df":               fbcf_df,
         "emae_df":               emae_df,
         "cpi_df":                cpi_df,
+        "cpi_div_df":            cpi_div_df,
+        "cpi_cat_df":            cpi_cat_df,
         "consumption_df":        consumption_df,
         "production_df":         production_df,
         "agro_df":               agro_df,

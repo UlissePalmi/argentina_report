@@ -29,6 +29,82 @@ _TRAILING_INT = re.compile(r'(?:(?<=\s)|^)(\d+)\s*$')           # small integer 
 
 _SECTION_PARENTS = ['ASSETS', 'LIABILITIES', 'NET_EQUITY']
 
+# English translations for section names and PDF item labels.
+_SECTION_EN = {
+    "RESERVAS INTERNACIONALES":                                                    "INTERNATIONAL RESERVES",
+    "TITULOS PUBLICOS":                                                            "GOVERNMENT SECURITIES",
+    "ADELANTOS TRANSITORIOS AL GOBIERNO NACIONAL":                                 "TRANSITORY ADVANCES TO NATIONAL GOVERNMENT",
+    "CREDITOS AL SISTEMA FINANCIERO DEL PAIS":                                     "LOANS TO DOMESTIC FINANCIAL SYSTEM",
+    "APORTES A ORGANISMOS INTERNACIONALES POR CUENTA DEL GOBIERNO NACIONAL Y OTROS": "CONTRIBUTIONS TO INTERNATIONAL ORGANIZATIONS (GOVT ACCOUNT)",
+    "DERECHOS PROVENIENTES DE OTROS INSTRUMENTOS FINANCIEROS DERIVADOS":           "RIGHTS FROM FINANCIAL DERIVATIVE INSTRUMENTS",
+    "DERECHOS POR OPERACIONES DE PASES":                                           "RIGHTS FROM REPO OPERATIONS",
+    "OTROS ACTIVOS":                                                               "OTHER ASSETS",
+    "BASE MONETARIA":                                                              "MONETARY BASE",
+    "MEDIOS DE PAGO EN OTRAS MONEDAS":                                             "MEANS OF PAYMENT IN OTHER CURRENCIES",
+    "CUENTAS CORRIENTES EN OTRAS MONEDAS":                                         "CURRENT ACCOUNTS IN OTHER CURRENCIES",
+    "DEPOSITOS DEL GOBIERNO NACIONAL Y OTROS":                                     "NATIONAL GOVERNMENT AND OTHER DEPOSITS",
+    "OTROS DEPOSITOS":                                                             "OTHER DEPOSITS",
+    "ASIGNACIONES DE DEG":                                                         "SDR ALLOCATIONS",
+    "OBLIGACIONES CON ORGANISMOS INTERNACIONALES":                                 "OBLIGATIONS WITH INTERNATIONAL ORGANIZATIONS",
+    "TITULOS EMITIDOS POR EL B.C.R.A.":                                            "SECURITIES ISSUED BY THE BCRA",
+    "CONTRAPARTIDA DE APORTES DEL GOBIERNO NACIONAL A ORGANISMOS INTERNACIONALES": "COUNTERPART OF GOVT CONTRIBUTIONS TO INTL ORGANIZATIONS",
+    "OBLIGACIONES PROVENIENTES DE OTROS INSTRUMENTOS FINANCIEROS DERIVADOS":       "OBLIGATIONS FROM FINANCIAL DERIVATIVE INSTRUMENTS",
+    "OBLIGACIONES POR OPERACIONES DE PASE":                                        "REPO OBLIGATIONS",
+    "DEUDAS POR CONVENIOS MULTILATERALES DE CREDITO":                              "MULTILATERAL CREDIT AGREEMENT DEBTS",
+    "OTROS PASIVOS":                                                               "OTHER LIABILITIES",
+    "PREVISIONES":                                                                 "PROVISIONS",
+}
+
+_ITEM_EN = {
+    # International reserves sub-items
+    "Oro (Neto de Previsiones)":                               "Gold (Net of Provisions)",
+    "Divisas":                                                 "Foreign Currency Deposits",
+    "Colocaciones realizables en divisas":                     "Investable Foreign Currency Placements",
+    "Convenios Multilaterales de Crédito":               "Multilateral Credit Agreements",
+    "Convenios Multilaterales de Cr�ito":                "Multilateral Credit Agreements",
+    "Instrumentos Derivados sobre Reservas Internacionales":   "Derivative Instruments on International Reserves",
+    # Government securities
+    "Títulos Públicos bajo Ley Extranjera":         "Government Securities under Foreign Law",
+    "Títulos Públicos bajo Ley Nacional":           "Government Securities under Domestic Law",
+    "T�tulos P�blicos bajo Ley Extranjera":         "Government Securities under Foreign Law",
+    "T�tulos P�blicos bajo Ley Nacional":           "Government Securities under Domestic Law",
+    "Títulos obtenidos por operaciones de pases activos": "Securities from Active Repo Operations",
+    "T�tulos obtenidos por operaciones de pases activos": "Securities from Active Repo Operations",
+    "PREVISION DESVALORIZACION DE TITULOS PUBLICOS":           "Provision for Devaluation of Govt Securities",
+    # Financial system loans
+    "Entidades financieras":                                   "Financial Institutions",
+    "Previsión por incobrabilidad":                      "Provision for Bad Debts",
+    "Previsi�dn por incobrabilidad":                     "Provision for Bad Debts",
+    # Monetary base
+    "Billetes y Monedas en Circulación":                 "Notes and Coins in Circulation",
+    "Billetes y Monedas en Circulaci�n":                 "Notes and Coins in Circulation",
+    "Cheques Cancelatorios en pesos en Circulación":     "Peso Cancellation Checks in Circulation",
+    "Cheques Cancelatorios en pesos en Circulaci�n":     "Peso Cancellation Checks in Circulation",
+    "Cuentas Corrientes en Pesos":                             "Peso Current Accounts",
+    # Other currencies
+    "Cheques Cancelatorios en otras monedas en Circulación": "Foreign Currency Cancellation Checks in Circulation",
+    "Cheques Cancelatorios en otras monedas en Circulaci�n": "Foreign Currency Cancellation Checks in Circulation",
+    "Certificados de Depósito para la Inversión":   "Investment Deposit Certificates",
+    "Certificados de Dep�ito para la Inversi�n":    "Investment Deposit Certificates",
+    # Deposits
+    "Otros Depositos":                                         "Other Deposits",
+    # SDR allocations
+    "Asignaciones de DEG":                                     "SDR Allocations",
+    "Contrapartida de Asignaciones de DEG":                    "Counterpart of SDR Allocations",
+    # International obligations
+    "Obligaciones":                                            "Obligations",
+    "Contrapartida del Uso del Tramo de Reservas":             "Counterpart of Reserve Tranche Usage",
+    # BCRA securities
+    "Letras y Notas emitidas en Moneda Extranjera":            "Notes and Bonds in Foreign Currency",
+    "Letras y Notas emitidas en Moneda Nacional":              "Notes and Bonds in Domestic Currency",
+}
+
+
+def _en(spanish: str) -> str:
+    """Return the English label for a Spanish section or item name, or the original if not mapped."""
+    return _SECTION_EN.get(spanish) or _ITEM_EN.get(spanish) or spanish
+
+
 KNOWN_ASSETS = [
     "RESERVAS INTERNACIONALES",
     "TITULOS PUBLICOS",
@@ -219,9 +295,9 @@ def _parse_balance_sheet(text: str) -> dict:
             if current_parent is None:
                 continue
 
-        # Only attempt section matching for ALL-CAPS lines (mixed-case = item line)
-        # Strip formatted numbers AND standalone integers so "DERECHOS...  0" → "DERECHOS..."
+        # saves label post stripping numbers
         label_only = re.sub(r'\s+', ' ', re.sub(r'\b\d+\b', '', _NUM_RE.sub('', line))).strip()
+        # is_caps = True if text is in all caps and non-empty
         is_caps = bool(label_only) and not re.search(r'[a-z]', label_only)
 
         if is_caps or accumulated:
@@ -281,7 +357,7 @@ def _validate_totals(bs: dict) -> None:
 
 
 def _flatten(bs: dict) -> dict:
-    """Flatten to {'ASSETS|RESERVAS INTERNACIONALES|Divisas': value, ...}"""
+    """Flatten to {'ASSETS|INTERNATIONAL RESERVES|Foreign Currency Deposits': value, ...}"""
     flat: dict = {}
     for parent in _SECTION_PARENTS:
         if parent == 'NET_EQUITY':
@@ -291,7 +367,7 @@ def _flatten(bs: dict) -> dict:
             known = KNOWN_ASSETS if parent == 'ASSETS' else KNOWN_LIABILITIES
             for section in known:
                 for label, val in bs.get(parent, {}).get(section, {}).items():
-                    flat[f"{parent}|{section}|{label}"] = val
+                    flat[f"{parent}|{_en(section)}|{_en(label)}"] = val
     return flat
 
 
@@ -313,9 +389,12 @@ def fetch_bcra_balance_sheet() -> dict | None:
     Skips if the reference date is already in the CSV.
     """
     url = "https://www.bcra.gob.ar/archivos/Pdfs/PublicacionesEstadisticas/econ0200.pdf"
-    
-    # Fetch and extract text from PDF
-    text = _pdf.fetch_text(url, cache_key="bcra_balance_sheet_pdf")
+
+    # Fetch PDF bytes and extract text
+    pdf_bytes = _pdf.fetch_bytes(url, cache_key="bcra_balance_sheet_pdf")
+    if pdf_bytes is None:
+        return None
+    text = _pdf.extract_text(pdf_bytes)
     if text is None:
         return None
 
@@ -324,13 +403,23 @@ def fetch_bcra_balance_sheet() -> dict | None:
                    warn="BCRA balance sheet: reference date not found")
     if not dm:
         return None
-    
+
     # Convert Spanish month name to month number (e.g. "al 30 de abril de 2025" → "2025-04-30")
     month_num = _MONTHS_ES.get(dm.group(2).lower())
     if month_num is None:
         log.warning("BCRA balance sheet: unrecognised month '%s'", dm.group(2))
         return None
     ref_date = str(pd.Timestamp(year=int(dm.group(3)), month=month_num, day=int(dm.group(1))).date())
+
+    # Save PDF permanently so historical re-parsing is possible
+    pdf_dir = RESERVES_DIR / "pdfs"
+    pdf_dir.mkdir(exist_ok=True)
+    pdf_path = pdf_dir / f"bcra_balance_sheet_{ref_date}.pdf"
+    if not pdf_path.exists():
+        pdf_path.write_bytes(pdf_bytes)
+        log.info("BCRA balance sheet PDF saved -> %s", pdf_path.name)
+    else:
+        log.debug("BCRA balance sheet PDF already saved: %s", pdf_path.name)
 
     # Exchange rate for USD conversion (e.g. "$ 350,50 = USD")
     fxm = _pdf.find(text, r"\$\s*([\d\.]+),([\d]+)\s*=\s*USD", warn="BCRA balance sheet: exchange rate not found")
