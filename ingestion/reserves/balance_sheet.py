@@ -1,20 +1,15 @@
-"""
-BCRA balance sheet and reserves: weekly PDF snapshot, monthly gross reserves, FX rate.
-"""
+"""BCRA Estado Resumido de Activos y Pasivos — weekly PDF parser."""
 
 import re
 
 import pandas as pd
 
 from utils import RESERVES_DIR, get_logger
-from .client import DatosClient, PdfClient, _start, to_monthly_last
+from ..client import PdfClient
+from .schema import KNOWN_ASSETS, KNOWN_LIABILITIES, _SECTION_PARENTS, en as _en
 
 log = get_logger("fetch.reserves")
-_d   = DatosClient()
 _pdf = PdfClient(timeout=30)
-
-RESERVES_DAILY   = "92.2_RESERVAS_IRES_0_0_32_40"
-RESERVES_MONTHLY = "92.1_RID_0_0_32"
 
 _MONTHS_ES = {
     "enero": 1, "febrero": 2, "marzo": 3, "abril": 4,
@@ -26,112 +21,6 @@ _NUM_RE       = re.compile(r'\(\s*\d{1,3}(?:\.\d{3})*\s*\)|\d{1,3}(?:\.\d{3})+|\
 _SPLIT_NUM    = re.compile(r'\b(\d{1,2})\s+(\d(?:\.\d{3})+)')   # fix "5 0.602.176" → "50.602.176"
 _SPACED_LINE  = re.compile(r'^[A-Z](\s[A-Z]){2,}')              # spaced-caps total lines
 _TRAILING_INT = re.compile(r'(?:(?<=\s)|^)(\d+)\s*$')           # small integer at end (or alone) on a line
-
-_SECTION_PARENTS = ['ASSETS', 'LIABILITIES', 'NET_EQUITY']
-
-# English translations for section names and PDF item labels.
-_SECTION_EN = {
-    "RESERVAS INTERNACIONALES":                                                    "INTERNATIONAL RESERVES",
-    "TITULOS PUBLICOS":                                                            "GOVERNMENT SECURITIES",
-    "ADELANTOS TRANSITORIOS AL GOBIERNO NACIONAL":                                 "TRANSITORY ADVANCES TO NATIONAL GOVERNMENT",
-    "CREDITOS AL SISTEMA FINANCIERO DEL PAIS":                                     "LOANS TO DOMESTIC FINANCIAL SYSTEM",
-    "APORTES A ORGANISMOS INTERNACIONALES POR CUENTA DEL GOBIERNO NACIONAL Y OTROS": "CONTRIBUTIONS TO INTERNATIONAL ORGANIZATIONS (GOVT ACCOUNT)",
-    "DERECHOS PROVENIENTES DE OTROS INSTRUMENTOS FINANCIEROS DERIVADOS":           "RIGHTS FROM FINANCIAL DERIVATIVE INSTRUMENTS",
-    "DERECHOS POR OPERACIONES DE PASES":                                           "RIGHTS FROM REPO OPERATIONS",
-    "OTROS ACTIVOS":                                                               "OTHER ASSETS",
-    "BASE MONETARIA":                                                              "MONETARY BASE",
-    "MEDIOS DE PAGO EN OTRAS MONEDAS":                                             "MEANS OF PAYMENT IN OTHER CURRENCIES",
-    "CUENTAS CORRIENTES EN OTRAS MONEDAS":                                         "CURRENT ACCOUNTS IN OTHER CURRENCIES",
-    "DEPOSITOS DEL GOBIERNO NACIONAL Y OTROS":                                     "NATIONAL GOVERNMENT AND OTHER DEPOSITS",
-    "OTROS DEPOSITOS":                                                             "OTHER DEPOSITS",
-    "ASIGNACIONES DE DEG":                                                         "SDR ALLOCATIONS",
-    "OBLIGACIONES CON ORGANISMOS INTERNACIONALES":                                 "OBLIGATIONS WITH INTERNATIONAL ORGANIZATIONS",
-    "TITULOS EMITIDOS POR EL B.C.R.A.":                                            "SECURITIES ISSUED BY THE BCRA",
-    "CONTRAPARTIDA DE APORTES DEL GOBIERNO NACIONAL A ORGANISMOS INTERNACIONALES": "COUNTERPART OF GOVT CONTRIBUTIONS TO INTL ORGANIZATIONS",
-    "OBLIGACIONES PROVENIENTES DE OTROS INSTRUMENTOS FINANCIEROS DERIVADOS":       "OBLIGATIONS FROM FINANCIAL DERIVATIVE INSTRUMENTS",
-    "OBLIGACIONES POR OPERACIONES DE PASE":                                        "REPO OBLIGATIONS",
-    "DEUDAS POR CONVENIOS MULTILATERALES DE CREDITO":                              "MULTILATERAL CREDIT AGREEMENT DEBTS",
-    "OTROS PASIVOS":                                                               "OTHER LIABILITIES",
-    "PREVISIONES":                                                                 "PROVISIONS",
-}
-
-_ITEM_EN = {
-    # International reserves sub-items
-    "Oro (Neto de Previsiones)":                               "Gold (Net of Provisions)",
-    "Divisas":                                                 "Foreign Currency Deposits",
-    "Colocaciones realizables en divisas":                     "Investable Foreign Currency Placements",
-    "Convenios Multilaterales de Crédito":               "Multilateral Credit Agreements",
-    "Convenios Multilaterales de Cr�ito":                "Multilateral Credit Agreements",
-    "Instrumentos Derivados sobre Reservas Internacionales":   "Derivative Instruments on International Reserves",
-    # Government securities
-    "Títulos Públicos bajo Ley Extranjera":         "Government Securities under Foreign Law",
-    "Títulos Públicos bajo Ley Nacional":           "Government Securities under Domestic Law",
-    "T�tulos P�blicos bajo Ley Extranjera":         "Government Securities under Foreign Law",
-    "T�tulos P�blicos bajo Ley Nacional":           "Government Securities under Domestic Law",
-    "Títulos obtenidos por operaciones de pases activos": "Securities from Active Repo Operations",
-    "T�tulos obtenidos por operaciones de pases activos": "Securities from Active Repo Operations",
-    "PREVISION DESVALORIZACION DE TITULOS PUBLICOS":           "Provision for Devaluation of Govt Securities",
-    # Financial system loans
-    "Entidades financieras":                                   "Financial Institutions",
-    "Previsión por incobrabilidad":                      "Provision for Bad Debts",
-    "Previsi�dn por incobrabilidad":                     "Provision for Bad Debts",
-    # Monetary base
-    "Billetes y Monedas en Circulación":                 "Notes and Coins in Circulation",
-    "Billetes y Monedas en Circulaci�n":                 "Notes and Coins in Circulation",
-    "Cheques Cancelatorios en pesos en Circulación":     "Peso Cancellation Checks in Circulation",
-    "Cheques Cancelatorios en pesos en Circulaci�n":     "Peso Cancellation Checks in Circulation",
-    "Cuentas Corrientes en Pesos":                             "Peso Current Accounts",
-    # Other currencies
-    "Cheques Cancelatorios en otras monedas en Circulación": "Foreign Currency Cancellation Checks in Circulation",
-    "Cheques Cancelatorios en otras monedas en Circulaci�n": "Foreign Currency Cancellation Checks in Circulation",
-    "Certificados de Depósito para la Inversión":   "Investment Deposit Certificates",
-    "Certificados de Dep�ito para la Inversi�n":    "Investment Deposit Certificates",
-    # Deposits
-    "Otros Depositos":                                         "Other Deposits",
-    # SDR allocations
-    "Asignaciones de DEG":                                     "SDR Allocations",
-    "Contrapartida de Asignaciones de DEG":                    "Counterpart of SDR Allocations",
-    # International obligations
-    "Obligaciones":                                            "Obligations",
-    "Contrapartida del Uso del Tramo de Reservas":             "Counterpart of Reserve Tranche Usage",
-    # BCRA securities
-    "Letras y Notas emitidas en Moneda Extranjera":            "Notes and Bonds in Foreign Currency",
-    "Letras y Notas emitidas en Moneda Nacional":              "Notes and Bonds in Domestic Currency",
-}
-
-
-def _en(spanish: str) -> str:
-    """Return the English label for a Spanish section or item name, or the original if not mapped."""
-    return _SECTION_EN.get(spanish) or _ITEM_EN.get(spanish) or spanish
-
-
-KNOWN_ASSETS = [
-    "RESERVAS INTERNACIONALES",
-    "TITULOS PUBLICOS",
-    "ADELANTOS TRANSITORIOS AL GOBIERNO NACIONAL",
-    "CREDITOS AL SISTEMA FINANCIERO DEL PAIS",
-    "APORTES A ORGANISMOS INTERNACIONALES POR CUENTA DEL GOBIERNO NACIONAL Y OTROS",
-    "DERECHOS PROVENIENTES DE OTROS INSTRUMENTOS FINANCIEROS DERIVADOS",
-    "DERECHOS POR OPERACIONES DE PASES",
-    "OTROS ACTIVOS",
-]
-
-KNOWN_LIABILITIES = [
-    "BASE MONETARIA",
-    "MEDIOS DE PAGO EN OTRAS MONEDAS",
-    "CUENTAS CORRIENTES EN OTRAS MONEDAS",
-    "DEPOSITOS DEL GOBIERNO NACIONAL Y OTROS",
-    "OTROS DEPOSITOS",
-    "ASIGNACIONES DE DEG",
-    "OBLIGACIONES CON ORGANISMOS INTERNACIONALES",
-    "TITULOS EMITIDOS POR EL B.C.R.A.",
-    "CONTRAPARTIDA DE APORTES DEL GOBIERNO NACIONAL A ORGANISMOS INTERNACIONALES",
-    "OBLIGACIONES PROVENIENTES DE OTROS INSTRUMENTOS FINANCIEROS DERIVADOS",
-    "OBLIGACIONES POR OPERACIONES DE PASE",
-    "DEUDAS POR CONVENIOS MULTILATERALES DE CREDITO",
-    "OTROS PASIVOS",
-    "PREVISIONES",
-]
 
 
 def _parse_ars_int(s: str) -> int | None:
@@ -171,7 +60,7 @@ def _parse_balance_sheet(text: str) -> dict:
     current_parent: str | None = None
     current_section: str | None = None
     section_lines: list[str] = []
-    accumulated: str = ''   # partial section name built across wrapped lines
+    accumulated: str = ''
 
     def flush(parent, section, raw_lines):
         """
@@ -189,9 +78,9 @@ def _parse_balance_sheet(text: str) -> dict:
         if parent is None or section is None or not raw_lines:
             return
 
-        final_items: dict = {}   # confirmed items
+        final_items: dict = {}
         group_header: str | None = None
-        group_items: dict = {}   # items accumulated since last no-number header
+        group_items: dict = {}
         section_total: int | None = None
         all_nums: list[str] = []
 
@@ -204,10 +93,9 @@ def _parse_balance_sheet(text: str) -> dict:
                     nums = [tm.group(1)]
 
             if not nums:
-                # No-number mixed-case line = group header (e.g. "Títulos Públicos bajo Ley Nacional")
                 label = re.sub(r'\s+', ' ', ln).strip()
                 if len(label) >= 2 and re.search(r'[a-z]', label) and not label[0].islower():
-                    final_items.update(group_items)   # flush any un-closed group items
+                    final_items.update(group_items)
                     group_header = label
                     group_items = {}
                 continue
@@ -230,36 +118,28 @@ def _parse_balance_sheet(text: str) -> dict:
             if len(nums) >= 2:
                 right = _parse_ars_int(nums[-1])
                 if group_header is not None and not is_caps and raw0.startswith('('):
-                    # Parenthetical first number = netting adjustment that closes the group subtotal.
-                    # e.g. Regularización (3.853.326)  112.112.908.726 → Ley Nacional: 112112908726
                     final_items[group_header] = right
                     group_header = None
                     group_items = {}
                 else:
-                    # No group collapse: flush group items and store this line normally.
-                    # e.g. Cuentas Corrientes en Pesos  15.794.846.585  41.186.003.948
-                    #       → item + right is running section total
                     final_items.update(group_items)
                     group_header = None
                     group_items = {}
                     if is_caps and _norm(label) == _norm(section):
-                        section_total = right   # section subtotal line, not stored as item
+                        section_total = right
                     else:
                         if len(label) >= 2 and not label[0].islower():
                             final_items[label] = val
                         section_total = right
             else:
-                # Single-number line: ALL-CAPS matching section name = section total on its own line
                 if is_caps and _norm(label) == _norm(section):
                     section_total = val
                 elif len(label) >= 2 and not label[0].islower():
                     target = group_items if group_header is not None else final_items
                     target[label] = val
 
-        # Flush any remaining un-closed group items
         final_items.update(group_items)
 
-        # Single-number rule: 1 number in the whole block = _total, nothing else to store
         if len(all_nums) == 1:
             result[parent][section]['_total'] = _parse_ars_int(all_nums[0])
             return
@@ -273,7 +153,6 @@ def _parse_balance_sheet(text: str) -> dict:
         if not line:
             continue
 
-        # Spaced-caps lines: ACTIVO / PASIVO switches and PATRIMONIO NETO total
         if _SPACED_LINE.match(line):
             flat = line.replace(' ', '').upper()
             if flat == 'ACTIVO':
@@ -286,18 +165,15 @@ def _parse_balance_sheet(text: str) -> dict:
                 nums = _NUM_RE.findall(line)
                 if nums:
                     result['NET_EQUITY']['_total'] = _parse_ars_int(nums[-1])
-                flush(current_parent, current_section, section_lines)  # flush last section
-                current_section, section_lines = None, []              # stop collecting (footnotes follow)
+                flush(current_parent, current_section, section_lines)
+                current_section, section_lines = None, []
             continue
 
         if current_parent is None or current_section is None and not accumulated:
-            # Haven't entered a section yet, or just flushed for PATRIMONIO
             if current_parent is None:
                 continue
 
-        # saves label post stripping numbers
         label_only = re.sub(r'\s+', ' ', re.sub(r'\b\d+\b', '', _NUM_RE.sub('', line))).strip()
-        # is_caps = True if text is in all caps and non-empty
         is_caps = bool(label_only) and not re.search(r'[a-z]', label_only)
 
         if is_caps or accumulated:
@@ -307,22 +183,21 @@ def _parse_balance_sheet(text: str) -> dict:
 
             if candidate in parent_known:
                 matched = parent_known[candidate]
-                if matched != current_section:          # new section boundary
+                if matched != current_section:
                     flush(current_parent, current_section, section_lines)
                     current_section = matched
                     section_lines = [line] if _NUM_RE.search(line) or _TRAILING_INT.search(line) else []
-                else:                                   # same section name re-appears = subtotal line
+                else:
                     section_lines.append(line)
                 accumulated = ''
                 continue
 
             if any(k.startswith(candidate) for k in parent_known):
-                accumulated = candidate                 # partial match — wait for next line
+                accumulated = candidate
                 continue
 
             accumulated = ''
 
-            # Unmatched ALL-CAPS line with no number → possible new section
             if (current_section is not None
                     and not _NUM_RE.search(line) and not _TRAILING_INT.search(line)
                     and len(norm_no_num) >= 8):
@@ -390,7 +265,6 @@ def fetch_bcra_balance_sheet() -> dict | None:
     """
     url = "https://www.bcra.gob.ar/archivos/Pdfs/PublicacionesEstadisticas/econ0200.pdf"
 
-    # Fetch PDF bytes and extract text
     pdf_bytes = _pdf.fetch_bytes(url, cache_key="bcra_balance_sheet_pdf")
     if pdf_bytes is None:
         return None
@@ -398,20 +272,17 @@ def fetch_bcra_balance_sheet() -> dict | None:
     if text is None:
         return None
 
-    # Extract reference date from text (e.g. "al 31 de diciembre de 2023")
     dm = _pdf.find(text, r"al\s+(\d+)\s+de\s+(\w+)\s+de\s+(\d{4})", re.IGNORECASE,
                    warn="BCRA balance sheet: reference date not found")
     if not dm:
         return None
 
-    # Convert Spanish month name to month number (e.g. "al 30 de abril de 2025" → "2025-04-30")
     month_num = _MONTHS_ES.get(dm.group(2).lower())
     if month_num is None:
         log.warning("BCRA balance sheet: unrecognised month '%s'", dm.group(2))
         return None
     ref_date = str(pd.Timestamp(year=int(dm.group(3)), month=month_num, day=int(dm.group(1))).date())
 
-    # Save PDF permanently so historical re-parsing is possible
     pdf_dir = RESERVES_DIR / "pdfs"
     pdf_dir.mkdir(exist_ok=True)
     pdf_path = pdf_dir / f"bcra_balance_sheet_{ref_date}.pdf"
@@ -421,11 +292,9 @@ def fetch_bcra_balance_sheet() -> dict | None:
     else:
         log.debug("BCRA balance sheet PDF already saved: %s", pdf_path.name)
 
-    # Exchange rate for USD conversion (e.g. "$ 350,50 = USD")
     fxm = _pdf.find(text, r"\$\s*([\d\.]+),([\d]+)\s*=\s*USD", warn="BCRA balance sheet: exchange rate not found")
     fx = (float(fxm.group(1).replace(".", "")) + float("0." + fxm.group(2))) if fxm else None
 
-    # Parse into {section: {subsection: {label: value}}} then flatten to section-ordered columns
     bs = _parse_balance_sheet(text)
     if not bs:
         log.warning("BCRA balance sheet: no items extracted")
@@ -468,50 +337,3 @@ def _append_to_balance_sheet_csv(row: dict, filename: str) -> None:
 
     df.to_csv(path, index=False)
     log.info("BCRA balance sheet -> %s (%d rows, %d cols)", filename, len(df), len(df.columns))
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Separate function -------------------------------------------------------
-
-def fetch_reserves(months: int = 24) -> pd.DataFrame | None:
-    """Fetch BCRA gross international reserves (monthly time series).
-
-    Tries the daily datos.gob.ar series first (collapsed to month-end), falls
-    back to the monthly series. Columns: date, reserves_usd_bn.
-    """
-    start = _start(months, buffer=1)
-    df = None
-
-    raw = _d.fetch([RESERVES_DAILY], limit=months * 31, start_date=start)
-    if raw is not None and RESERVES_DAILY in raw.columns:
-        raw = raw.rename(columns={RESERVES_DAILY: "reserves_usd_m"})
-        df  = to_monthly_last(raw, "reserves_usd_m")
-        log.info("BCRA reserves: datos.gob.ar daily -> monthly")
-
-    if df is None:
-        raw2 = _d.fetch([RESERVES_MONTHLY], limit=months + 6, start_date=start)
-        if raw2 is not None and RESERVES_MONTHLY in raw2.columns:
-            df = raw2.rename(columns={RESERVES_MONTHLY: "reserves_usd_m"})[["date", "reserves_usd_m"]]
-
-    if df is None:
-        log.warning("BCRA reserves: all sources failed.")
-        return None
-
-    df["reserves_usd_bn"] = df["reserves_usd_m"] / 1_000
-    df = df[["date", "reserves_usd_bn"]].dropna().tail(months).reset_index(drop=True)
-
-    df.to_csv(RESERVES_DIR / "bcra_reserves.csv", index=False)
-    log.info("BCRA reserves saved -> bcra_reserves.csv  (%d rows)", len(df))
-    return df

@@ -10,8 +10,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Running the pipeline
 
 ```bash
-uv run python main.py
+uv run python main.py [--refresh] [--no-pdf] [--data-only]
 ```
+
+| Flag | Effect |
+|---|---|
+| _(none)_ | Full run: fetch → signals → SVAR → reports |
+| `--refresh` | Clear cache before running to force re-fetch of all data |
+| `--no-pdf` | Skip PDF/report generation (fetch + signals + SVAR only) |
+| `--data-only` | Fetch and save CSVs only — skip signals, SVAR, and reports |
 
 Fetches all data, computes signals, generates charts, and writes three PDFs to `data/reports/`:
 - `argentina_macro_report.pdf` — main report (external, inflation, fiscal, debt, GDP, production, labor, consumption)

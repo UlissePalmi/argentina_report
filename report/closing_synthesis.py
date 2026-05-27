@@ -108,7 +108,7 @@ def build_closing_synthesis(pdf: ArgentinaPDF) -> str:
         pdf.set_text_color(*fg)
         pdf.set_font("Helvetica", "B", 9)
         pdf.cell(col_w, 6, title, fill=True, align="C",
-                 new_x=XPos.LMARGIN, new_y=XPos.LMARGIN)
+                 new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.set_xy(x, pdf.get_y() + 6)
         pdf.set_font("Helvetica", "", 8)
         pdf.set_text_color(40, 40, 40)
