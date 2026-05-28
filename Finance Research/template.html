@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{ firm }} — {{ vol }}</title>
+<link rel="stylesheet" href="report.css">
+</head>
+<body>
+
+{# ═══════════════════════════════════════════════════════════
+   PAGE 1 — COVER
+══════════════════════════════════════════════════════════════ #}
+<section class="doc-page">
+
+  {# ── Masthead ─────────────────────────────────────────── #}
+  <div class="masthead">
+    <div class="masthead-top-row">
+      <span class="masthead-firm-label">Argentina Macro Monitor &nbsp;·&nbsp; Weekly Macro Research</span>
+      <span class="masthead-vol-label">{{ vol }}</span>
+    </div>
+    <div class="masthead-name-row">
+      <div>
+        <p class="nameplate">Argentina Macro Monitor</p>
+        <p class="nameplate-tagline">Buenos Aires &nbsp;·&nbsp; Macro &amp; FX &nbsp;·&nbsp; Argentina</p>
+      </div>
+      <div class="masthead-date-block">
+        <p class="masthead-date">{{ date }}</p>
+        <span class="badge">Confidential &nbsp;·&nbsp; Internal Only</span>
+      </div>
+    </div>
+    <hr class="rule-thick" style="margin: 8pt 0 0 0;">
+    <div class="masthead-edition-row">
+      <span class="masthead-edition-text">{{ title }} &nbsp;·&nbsp; Weekly Edition</span>
+      <span class="masthead-page-label">Page 1 of 4 &nbsp;·&nbsp; Distribute Internally</span>
+    </div>
+    <hr class="rule" style="margin: 0 0 10pt 0;">
+  </div>
+
+  {# ── Thesis / Bottom Line ────────────────────────────── #}
+  <div class="two-col two-col-7-5">
+    <div>
+      <span class="kicker">Thesis</span>
+      <h2 class="cover-title">{{ title }}</h2>
+      <p class="cover-subtitle">{{ subtitle }}</p>
+    </div>
+    <div>
+      <span class="kicker">Bottom Line</span>
+      <p class="body-copy" style="margin-top:3pt;">{{ bottomline }}</p>
+      <div class="action-tags">
+        {% for tag in action_tags %}
+        <span class="action-tag action-tag-{{ tag.sig }}">{{ tag.label }}</span>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <hr class="rule" style="margin: 9pt 0 8pt 0;">
+
+  {# ── Hero KPI strip ──────────────────────────────────── #}
+  <div class="hero-strip">
+    {% for h in hero %}
+    <div class="hero-card">
+      <span class="hero-key">{{ h.k }}</span>
+      <span class="hero-val">{{ h.v }}</span>
+      <span class="hero-desc">{{ h.d }}</span>
+    </div>
+    {% endfor %}
+  </div>
+
+  <hr class="rule-thick" style="margin: 9pt 0 7pt 0;">
+
+  {# ── Key Findings + Scenarios ────────────────────────── #}
+  <div class="two-col two-col-7-5">
+    <div>
+      <span class="kicker">Key Findings</span>
+      <ul class="thesis-list">
+        {% for item in thesis %}
+        <li>{{ item }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+    <div>
+      <span class="kicker" style="display:block; margin-bottom:4pt;">Scenarios</span>
+      <table class="scenario-table">
+        <thead>
+          <tr>
+            <th></th>
+            {% for col in scenario_cols %}
+            <th>{{ col }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in scenario_rows %}
+          <tr{% if row.bold %} class="bold"{% endif %}>
+            <td>{{ row.label }}</td>
+            {% for v in row.vals %}
+            <td>{{ v }}</td>
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <footer class="page-foot">
+    <span class="page-foot-left">{{ firm }} — Confidential. For informational purposes only.</span>
+    <span class="page-foot-right">1</span>
+  </footer>
+
+</section>
+
+
+{# ═══════════════════════════════════════════════════════════
+   PAGE 2 — §I  FX & SCENARIOS
+══════════════════════════════════════════════════════════════ #}
+<section class="doc-page">
+
+  <header class="page-head">
+    <span class="page-head-firm">{{ firm }}</span>
+    <span class="page-head-meta">{{ vol }} &nbsp;·&nbsp; {{ date }}</span>
+  </header>
+
+  <div class="section-head">
+    <span class="section-numeral">§I</span>
+    <div class="section-rule"></div>
+  </div>
+  <h2 class="section-title">Exchange Rate &amp; FX Regime</h2>
+  <p class="section-sub">Official rate · parallel spread (brecha) · real exchange rate (REER)</p>
+
+  <div class="two-col two-col-6-6">
+
+    <div>
+      <div class="block-head">
+        <span class="kicker">Dollar Fan</span>
+        <h3 class="block-title">Oficial · MEP · CCL · Blue</h3>
+      </div>
+      <hr class="rule">
+      <div class="chart-wrap">
+        {% if charts.fx_dollar_fan %}
+        <img src="{{ charts.fx_dollar_fan }}" alt="Dollar fan chart">
+        {% else %}
+        <div class="chart-placeholder"><span>Chart pending — run main.py first</span></div>
+        {% endif %}
+        <p class="chart-caption">ARS/USD · source: dolarapi.com</p>
+      </div>
+    </div>
+
+    <div>
+      <div class="block-head">
+        <span class="kicker">Real Exchange Rate</span>
+        <h3 class="block-title">REER vs 2-year History</h3>
+      </div>
+      <hr class="rule">
+      <div class="chart-wrap">
+        {% if charts.fx_reer %}
+        <img src="{{ charts.fx_reer }}" alt="REER chart">
+        {% else %}
+        <div class="chart-placeholder"><span>Chart pending — run main.py first</span></div>
+        {% endif %}
+        <p class="chart-caption">Bilateral REER proxy · official × (US CPI / AR CPI), base = 100</p>
+      </div>
+    </div>
+
+  </div>
+
+  <hr class="rule" style="margin: 8pt 0;">
+
+  <div class="two-col two-col-5-7">
+
+    <div>
+      <span class="kicker">FX Signals</span>
+      <table class="heatmap-table" style="margin-top:4pt;">
+        <thead>
+          <tr>
+            <th>Metric</th>
+            <th style="text-align:center;">Signal</th>
+            <th>Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in fx_metrics %}
+          <tr>
+            <td>{{ row.label }}</td>
+            <td style="text-align:center;"><span class="sig-dot sig-{{ row.sig }}"></span></td>
+            <td>{{ row.value }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div>
+      <span class="kicker">Upcoming Catalysts</span>
+      <table class="catalyst-table" style="margin-top:4pt;">
+        <tbody>
+          {% for c in catalysts %}
+          <tr>
+            <td class="catalyst-date">{{ c.date }}</td>
+            <td class="catalyst-label{% if c.accent %} accent{% endif %}">{{ c.label }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+
+  <footer class="page-foot">
+    <span class="page-foot-left">{{ firm }} — Data: INDEC · BCRA · dolarapi.com</span>
+    <span class="page-foot-right">2</span>
+  </footer>
+
+</section>
+
+
+{# ═══════════════════════════════════════════════════════════
+   PAGE 3 — §II  INFLATION & FISCAL
+══════════════════════════════════════════════════════════════ #}
+<section class="doc-page">
+
+  <header class="page-head">
+    <span class="page-head-firm">{{ firm }}</span>
+    <span class="page-head-meta">{{ vol }} &nbsp;·&nbsp; {{ date }}</span>
+  </header>
+
+  <div class="section-head">
+    <span class="section-numeral">§II</span>
+    <div class="section-rule"></div>
+  </div>
+  <h2 class="section-title">Inflation &amp; Fiscal Balance</h2>
+  <p class="section-sub">CPI disinflation path · primary surplus · recent data releases</p>
+
+  <div class="two-col two-col-7-5">
+
+    <div>
+      <div class="block-head">
+        <span class="kicker">Inflation</span>
+        <h3 class="block-title">CPI MoM — 24 months</h3>
+      </div>
+      <hr class="rule">
+      <div class="chart-wrap">
+        {% if charts.chart_inflation %}
+        <img src="{{ charts.chart_inflation }}" alt="CPI chart">
+        {% else %}
+        <div class="chart-placeholder"><span>Chart pending — run main.py first</span></div>
+        {% endif %}
+        <p class="chart-caption">INDEC headline CPI · % MoM</p>
+      </div>
+    </div>
+
+    <div>
+      <div class="block-head">
+        <span class="kicker">Fiscal</span>
+        <h3 class="block-title">Primary Balance · % GDP</h3>
+      </div>
+      <hr class="rule">
+      <div class="chart-wrap">
+        {% if charts.chart_fiscal %}
+        <img src="{{ charts.chart_fiscal }}" alt="Fiscal chart">
+        {% else %}
+        <div class="chart-placeholder"><span>Chart pending — run main.py first</span></div>
+        {% endif %}
+        <p class="chart-caption">MECON monthly primary balance · % of GDP</p>
+      </div>
+    </div>
+
+  </div>
+
+  <hr class="rule" style="margin: 8pt 0;">
+
+  <div class="block-head" style="margin-top:4pt;">
+    <span class="kicker">Recent Prints</span>
+    <h3 class="block-title">Latest Data Releases</h3>
+  </div>
+  <hr class="rule">
+
+  <table class="prints-table">
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Release</th>
+        <th class="right">Actual</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in prints %}
+      <tr{% if p.accent %} class="accent"{% endif %}>
+        <td>{{ p.date }}</td>
+        <td>{{ p.label }}</td>
+        <td class="actual">{{ p.actual }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <footer class="page-foot">
+    <span class="page-foot-left">{{ firm }} — Data: INDEC · MECON</span>
+    <span class="page-foot-right">3</span>
+  </footer>
+
+</section>
+
+
+{# ═══════════════════════════════════════════════════════════
+   PAGE 4 — §III  SCORECARD & RISKS
+══════════════════════════════════════════════════════════════ #}
+<section class="doc-page">
+
+  <header class="page-head">
+    <span class="page-head-firm">{{ firm }}</span>
+    <span class="page-head-meta">{{ vol }} &nbsp;·&nbsp; {{ date }}</span>
+  </header>
+
+  <div class="section-head">
+    <span class="section-numeral">§III</span>
+    <div class="section-rule"></div>
+  </div>
+  <h2 class="section-title">Signal Scorecard &amp; Risks</h2>
+  <p class="section-sub">Green = positive signal · Amber = neutral · Red = negative</p>
+
+  <div class="two-col two-col-5-7">
+
+    <div>
+      <span class="kicker">Signal Heatmap</span>
+      <table class="heatmap-table" style="margin-top:4pt;">
+        <thead>
+          <tr>
+            <th>Domain</th>
+            <th style="text-align:center;">Sig</th>
+            <th>Value</th>
+            <th>3m avg</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in heatmap %}
+          <tr>
+            <td>{{ row.label }}</td>
+            <td style="text-align:center;"><span class="sig-dot sig-{{ row.sig }}"></span></td>
+            <td>{{ row.value }}</td>
+            <td style="color:var(--ink-3);">{{ row.avg }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div>
+      <span class="kicker">Key Risks</span>
+      <div style="margin-top:4pt;">
+        {% for r in risks %}
+        <div class="risk-item">
+          <span class="risk-tag">{{ r.tag }}</span>
+          <div>
+            <span class="risk-title">{{ r.title }}</span>
+            {% if r.body %}
+            <span class="risk-body">{{ r.body }}</span>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+  </div>
+
+  <hr class="rule" style="margin:8pt 0;">
+
+  <p class="disclosure">
+    <strong>{{ firm }}</strong> — {{ vol }}. This material is produced by an automated data pipeline
+    and is for informational purposes only. It does not constitute investment advice or a solicitation
+    to buy or sell any security. Data sourced from INDEC, BCRA, MECON, World Bank, and IMF.
+    All figures are subject to revision. Past performance is not indicative of future results.
+    Not for public distribution.
+  </p>
+
+  <footer class="page-foot">
+    <span class="page-foot-left">{{ firm }} — Data: INDEC · BCRA · MECON · WB · IMF</span>
+    <span class="page-foot-right">4</span>
+  </footer>
+
+</section>
+
+</body>
+</html>

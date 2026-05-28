@@ -4,6 +4,7 @@ from .reserves    import fetch_reserves, fetch_bcra_balance_sheet
 from .external    import (fetch_current_account, fetch_trade_balance,
                            fetch_external_debt, fetch_current_account_pct_gdp,
                            fetch_money_supply, fetch_exchange_rate)
+from .fx          import fetch_parallel_fx, fetch_reer
 from .fiscal      import fetch_fiscal
 from .debt        import (fetch_govt_ext_debt, fetch_domestic_debt_flows,
                            fetch_ext_debt_by_sector, fetch_ext_debt_by_sector_iip)
@@ -57,6 +58,16 @@ def fetch_all() -> tuple[dict, list[str]]:
     m2_df = fetch_money_supply(months=36)
     if m2_df is None:
         warnings.append("BCRA M2: FAILED (non-critical)")
+
+    log.info("[1c3/6] Fetching parallel dollars (brecha)...")
+    fx_parallel_df = fetch_parallel_fx()
+    if fx_parallel_df is None:
+        warnings.append("FX parallel (brecha): FAILED (non-critical -- check dollar API reachability)")
+
+    log.info("[1c4/6] Computing real exchange rate (REER proxy)...")
+    reer_df = fetch_reer(months=36)
+    if reer_df is None:
+        warnings.append("REER: FAILED (non-critical -- requires CPI + FX inputs)")
 
     log.info("[1d/6] Fetching trade balance...")
     trade_df = fetch_trade_balance(months=24)
@@ -188,6 +199,8 @@ def fetch_all() -> tuple[dict, list[str]]:
     data = {
         "reserves_df":           reserves_df,
         "fx_df":                 fx_df,
+        "fx_parallel_df":        fx_parallel_df,
+        "reer_df":               reer_df,
         "m2_df":                 m2_df,
         "ca_df":                 ca_df,
         "trade_df":              trade_df,

@@ -22,12 +22,51 @@ from signals import credit as sig_credit
 from signals import investment as sig_investment
 from signals import inflation as sig_inflation
 from signals import external as sig_external
+from signals import fx as sig_fx
 from signals import fiscal as sig_fiscal
 from signals import production as sig_production
 from signals import labor as sig_labor
 from signals import master as sig_master
 
 from ingestion.fetch_all          import fetch_all
+from report.weekly_diff           import snapshot as diff_snapshot
+
+def _generate_finance_research() -> None:
+    """Regenerate Finance Research JS + JSON data files and render react-pdf reports (best-effort)."""
+    import importlib.util
+    import subprocess
+    from pathlib import Path as _Path
+
+    # Step 1: regenerate JS/JSON data files from signals
+    try:
+        _gen_path = _Path(__file__).parent / "Finance Research" / "generate_data.py"
+        spec = importlib.util.spec_from_file_location("generate_data", _gen_path)
+        mod  = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        mod.generate()
+    except Exception as e:
+        log.warning("Finance Research data generation failed (non-critical): %s", e)
+        return
+
+    # Step 2: render react-pdf reports via Node.js
+    try:
+        pdf_dir = _Path(__file__).parent / "Finance Research" / "pdf"
+        result  = subprocess.run(
+            ["node", "generate.js"],
+            cwd=pdf_dir,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        if result.stdout:
+            for line in result.stdout.strip().splitlines():
+                log.info("  [FR-pdf] %s", line)
+        if result.returncode != 0:
+            log.warning("Finance Research PDF render non-zero exit: %s", result.stderr[:300])
+    except FileNotFoundError:
+        log.warning("node not found — Finance Research PDFs skipped (install Node.js to enable).")
+    except Exception as e:
+        log.warning("Finance Research PDF render failed (non-critical): %s", e)
 from sections.consumption.report    import build_productivity_report
 from sections.financing.report      import build_financing_report
 from sections.debt_reserves.report  import build_debt_reserves_report
@@ -59,11 +98,19 @@ def run_pipeline(no_pdf: bool = False) -> dict:
         sig_investment.compute()
         sig_inflation.compute()
         sig_external.compute()
+        sig_fx.compute()
         sig_fiscal.compute()
         sig_production.compute()
         sig_labor.compute()
         sig_master.compute()
         log.info("Signals computed successfully → data/signals/")
+        try:
+            diff_snapshot()
+            log.info("Weekly diff snapshot written.")
+        except Exception as snap_err:
+            log.warning("Diff snapshot failed (non-critical): %s", snap_err)
+        _generate_finance_research()
+        log.info("Finance Research JS data files regenerated.")
     except Exception as e:
         log.warning("Signal computation failed (non-critical): %s", e)
 
@@ -142,6 +189,10 @@ def run_pipeline(no_pdf: bool = False) -> dict:
                 "reserves_df": data["reserves_df"],
                 "ca_df":       data["ca_df"],
                 "fx_df":       data["fx_df"],
+            },
+            fx_data={
+                "fx_parallel_df": data["fx_parallel_df"],
+                "reer_df":        data["reer_df"],
             },
             inflation_data={
                 "cpi_df": data["cpi_df"],

@@ -9,7 +9,7 @@ import json
 
 import pandas as pd
 
-from utils import INFLATION_DIR, SIGNALS_DIR, get_logger
+from utils import INFLATION_DIR, RESERVES_DIR, SIGNALS_DIR, get_logger
 
 log = get_logger("signals.inflation")
 
@@ -56,24 +56,31 @@ def compute() -> dict:
                          consec_below5, consec_below3, consec_below2,
                          disinflation_confirmed)
 
+    # Last-mile: core (nucleo) run-rate + real peso appreciation vs the crawl
+    lm_metrics, lm_flags = _last_mile_metrics()
+    flags.extend(lm_flags)
+
     trend_dir = _trend_direction(mom_series.tail(6).tolist())
+
+    metrics = {
+        "cpi_mom_latest": cpi_mom_latest,
+        "cpi_yoy_latest": cpi_yoy_latest,
+        "cpi_mom_trend_3m": trend_3m,
+        "cpi_mom_trend_6m": trend_6m,
+        "cpi_mom_trend_12m": trend_12m,
+        "consecutive_months_below_5pct": consec_below5,
+        "consecutive_months_below_3pct": consec_below3,
+        "consecutive_months_below_2pct": consec_below2,
+        "disinflation_confirmed": disinflation_confirmed,
+        "last_12_months_mom": [round(v, 2) for v in mom_series.tail(12).tolist()],
+    }
+    metrics.update(lm_metrics)
 
     result = {
         "domain": "inflation",
         "as_of_date": as_of,
         "data_quality": "good" if cpi_mom_latest is not None else "poor",
-        "metrics": {
-            "cpi_mom_latest": cpi_mom_latest,
-            "cpi_yoy_latest": cpi_yoy_latest,
-            "cpi_mom_trend_3m": trend_3m,
-            "cpi_mom_trend_6m": trend_6m,
-            "cpi_mom_trend_12m": trend_12m,
-            "consecutive_months_below_5pct": consec_below5,
-            "consecutive_months_below_3pct": consec_below3,
-            "consecutive_months_below_2pct": consec_below2,
-            "disinflation_confirmed": disinflation_confirmed,
-            "last_12_months_mom": [round(v, 2) for v in mom_series.tail(12).tolist()],
-        },
+        "metrics": metrics,
         "flags": flags,
         "trend": trend_dir,
         "connection_to_master_variable": _connection(cpi_mom_latest, trend_dir),
@@ -82,6 +89,81 @@ def compute() -> dict:
 
     _save(result)
     return result
+
+
+def _last_mile_metrics() -> tuple[dict, list]:
+    """Core (nucleo) run-rate + real peso appreciation = core MoM minus actual FX
+    depreciation. Real appreciation is the bridge to the FX/REER overvaluation signal.
+    Best-effort: missing inputs yield None metrics, no flags, never raises."""
+    metrics: dict = {}
+    flags: list[str] = []
+
+    cat = _read_csv(INFLATION_DIR / "indec_cpi_categories.csv")
+    fx  = _read_csv(RESERVES_DIR / "bcra_fx.csv")
+
+    core_mom = core_3m = core_3m_ann = reg_mom = None
+    if cat is not None and "core_mom" in cat.columns:
+        cs = cat["core_mom"].dropna()
+        if not cs.empty:
+            core_mom    = round(float(cs.iloc[-1]), 2)
+            core_3m     = round(float(cs.tail(3).mean()), 2)
+            core_3m_ann = _annualize(core_3m)
+        if "regulated_mom" in cat.columns:
+            rs = cat["regulated_mom"].dropna()
+            reg_mom = round(float(rs.iloc[-1]), 2) if not rs.empty else None
+
+    fx_mom = fx_3m = None
+    if fx is not None and "usd_ars" in fx.columns:
+        f = fx["usd_ars"].dropna()
+        if len(f) >= 2:
+            mom = (f / f.shift(1) - 1) * 100
+            fx_mom = round(float(mom.iloc[-1]), 2)
+            fx_3m  = round(float(mom.tail(3).mean()), 2)
+
+    real_app_mom = round(core_mom - fx_mom, 2) if (core_mom is not None and fx_mom is not None) else None
+    real_app_3m  = round(core_3m  - fx_3m,  2) if (core_3m  is not None and fx_3m  is not None) else None
+
+    metrics.update({
+        "core_mom_latest": core_mom,
+        "core_mom_3m_avg": core_3m,
+        "core_3m_annualized": core_3m_ann,
+        "regulated_mom_latest": reg_mom,
+        "fx_mom_latest": fx_mom,
+        "real_peso_appreciation_mom": real_app_mom,   # core MoM - FX MoM
+        "real_peso_appreciation_3m": real_app_3m,
+    })
+
+    if core_mom is not None:
+        if core_mom >= 3:
+            flags.append(f"NOTE: Core (nucleo) CPI {core_mom:.1f}%/mo — last-mile disinflation sticky; "
+                         f"headline gains lean on regulated/seasonal items")
+        elif core_mom < 2:
+            flags.append(f"POSITIVE: Core (nucleo) CPI {core_mom:.1f}%/mo — last-mile disinflation advancing")
+
+    if real_app_3m is not None and real_app_3m > 1:
+        flags.append(f"WARNING: Peso appreciating ~{real_app_3m:.1f}%/mo in real terms "
+                     f"(core {core_3m:.1f}% vs FX {fx_3m:+.1f}%) — feeds REER overvaluation (see FX regime)")
+    elif real_app_3m is not None and real_app_3m < -1:
+        flags.append(f"POSITIVE: Peso depreciating ~{abs(real_app_3m):.1f}%/mo in real terms — "
+                     f"competitiveness improving")
+
+    return metrics, flags
+
+
+def _annualize(mom_pct: float | None) -> float | None:
+    if mom_pct is None:
+        return None
+    return round(((1 + mom_pct / 100) ** 12 - 1) * 100, 1)
+
+
+def _read_csv(path) -> pd.DataFrame | None:
+    if not path.exists():
+        return None
+    try:
+        return pd.read_csv(path, parse_dates=["date"]).sort_values("date").reset_index(drop=True)
+    except Exception as e:
+        log.warning("Could not read %s: %s", path, e)
+        return None
 
 
 def _avg(vals: list) -> float | None:

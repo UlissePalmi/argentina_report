@@ -89,10 +89,30 @@ def summarise(data: dict) -> str:
     trend = " Inflation is on a downward trend." if slope < -0.5 else \
             " Inflation is on an upward trend." if slope > 0.5 else \
             " Monthly inflation has been roughly stable in recent months."
-    return (
+    base = (
         f"Monthly CPI inflation in {latest_date} was {current_mom:.1f}%{yoy_str}. "
         f"The peak over the sample period was {peak_mom:.1f}% in {peak_date}.{trend}"
     )
+    return base + _last_mile_text()
+
+
+def _last_mile_text() -> str:
+    """Append the core (nucleo) run-rate and real-appreciation read from the
+    precomputed inflation signal (no arithmetic here)."""
+    m = load_signal("inflation").get("metrics", {})
+    core = m.get("core_mom_latest")
+    ann  = m.get("core_3m_annualized")
+    ra   = m.get("real_peso_appreciation_3m")
+    out = ""
+    if core is not None:
+        ann_str = f" (~{ann:.0f}% annualized)" if ann is not None else ""
+        out += (f" Core (nucleo) inflation -- the sticky last-mile component -- is running "
+                f"{core:.1f}%/month{ann_str}.")
+    if ra is not None and ra > 1:
+        out += (f" With the peso flat-to-stronger in nominal terms, that implies roughly "
+                f"{ra:.1f}%/month of real appreciation, the core driver of the exchange-rate "
+                f"overvaluation flagged in the FX section.")
+    return out
 
 
 def build_pdf_section(pdf, data: dict) -> None:

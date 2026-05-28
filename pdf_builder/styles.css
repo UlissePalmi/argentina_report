@@ -1,0 +1,324 @@
+/* ============================================================
+   Halford & Reade — Macro Research
+   Paper aesthetic, Classic Wall Street tokens
+   ============================================================ */
+
+:root {
+  /* Paper + ink */
+  --paper:        #f4f0e6;
+  --paper-edge:   #e8e2d2;
+  --paper-deep:   #ece6d4;
+  --ink:          #1a1714;
+  --ink-2:        #3a3530;
+  --ink-3:        #6b625a;
+  --ink-4:        #9a9087;
+  --rule:         #c9bfae;
+  --rule-soft:    #ddd3c0;
+
+  /* Accent — oxblood / rust */
+  --accent:       #a23b1f;
+  --accent-deep:  #7d2a14;
+  --accent-soft:  #c46a4f;
+
+  /* Semantic data */
+  --up:           #2f6b3a;
+  --down:         #a23b1f;
+  --flat:         #6b625a;
+
+  /* Type stacks */
+  --serif:  "Source Serif 4", "Source Serif Pro", "Charter", Georgia, serif;
+  --sans:   "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --mono:   "IBM Plex Mono", "JetBrains Mono", ui-monospace, monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #2a2722;
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* ---------- Page (artboard) shell ---------- */
+.page {
+  background: var(--paper);
+  color: var(--ink);
+  width: 100%;
+  height: 100%;
+  font-family: var(--serif);
+  position: relative;
+  overflow: hidden;
+  /* Subtle paper texture via tiny dot noise */
+  background-image:
+    radial-gradient(rgba(120,100,70,0.035) 1px, transparent 1px),
+    radial-gradient(rgba(120,100,70,0.025) 1px, transparent 1px);
+  background-size: 3px 3px, 7px 7px;
+  background-position: 0 0, 1px 2px;
+}
+
+/* Print rules */
+.rule        { border: 0; border-top: 1px solid var(--rule);      margin: 0; }
+.rule-thin   { border: 0; border-top: 1px solid var(--rule-soft); margin: 0; }
+.rule-thick  { border: 0; border-top: 2px solid var(--ink);       margin: 0; }
+.rule-double { border: 0; border-top: 3px double var(--ink);      margin: 0; }
+.rule-accent { border: 0; border-top: 2px solid var(--accent);    margin: 0; }
+.vrule       { width: 1px; background: var(--rule); align-self: stretch; }
+.vrule-soft  { width: 1px; background: var(--rule-soft); align-self: stretch; }
+
+/* Type utilities */
+.serif { font-family: var(--serif); }
+.sans  { font-family: var(--sans); }
+.mono  { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+.label {
+  font-family: var(--sans);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  font-weight: 500;
+}
+.label-accent { color: var(--accent); }
+
+.eyebrow {
+  font-family: var(--sans);
+  font-size: 8.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  font-weight: 600;
+}
+
+.kicker {
+  font-family: var(--sans);
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.num   { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.up    { color: var(--up); }
+.down  { color: var(--down); }
+.flat  { color: var(--flat); }
+
+/* Drop cap */
+.dropcap::first-letter {
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: 3.6em;
+  float: left;
+  line-height: 0.86;
+  padding: 4px 8px 0 0;
+  color: var(--accent);
+}
+
+/* Small caps for proper names / firm conventions */
+.smallcaps {
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.06em;
+}
+
+/* Tables — Bloomberg-tight */
+table.data {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--sans);
+  font-size: 10.5px;
+  color: var(--ink-2);
+}
+table.data th {
+  text-align: left;
+  font-weight: 600;
+  font-size: 8.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  padding: 5px 6px 4px;
+  border-bottom: 1px solid var(--ink);
+  white-space: nowrap;
+}
+table.data td {
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--rule-soft);
+  vertical-align: baseline;
+  white-space: nowrap;
+}
+table.data tr:last-child td { border-bottom: 0; }
+table.data td.n,
+table.data th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+table.data td.name { color: var(--ink); font-weight: 500; }
+table.data tr.section td {
+  background: var(--paper-deep);
+  font-weight: 600;
+  color: var(--ink);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 6px 6px 4px;
+}
+
+/* Pill / stamp / tag */
+.tag {
+  display: inline-block;
+  font-family: var(--sans);
+  font-size: 8.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 600;
+  padding: 2px 6px;
+  border: 1px solid var(--ink);
+  color: var(--ink);
+  background: transparent;
+}
+.tag.accent { color: var(--accent); border-color: var(--accent); }
+.tag.solid  { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.tag.solid-accent { background: var(--accent); color: var(--paper); border-color: var(--accent); }
+
+.stamp {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--sans);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 700;
+  border: 1.5px solid var(--accent);
+  padding: 3px 8px;
+  transform: rotate(-2deg);
+  background: rgba(255,255,255,0.4);
+}
+
+/* Sparkbar / micro charts */
+.sparkbar {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 1px;
+  height: 14px;
+}
+.sparkbar i {
+  display: block;
+  width: 2px;
+  background: var(--ink-3);
+}
+
+/* Page numbers / footer */
+.foot {
+  font-family: var(--sans);
+  font-size: 8.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* Pull quote */
+.pull {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 17px;
+  line-height: 1.35;
+  color: var(--ink);
+}
+.pull .mark {
+  font-family: var(--serif);
+  font-style: normal;
+  color: var(--accent);
+  font-size: 38px;
+  line-height: 0;
+  position: relative;
+  top: 12px;
+  margin-right: 2px;
+}
+
+/* Headings — research note */
+.h-display {
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: 38px;
+  line-height: 1.04;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.h-section {
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: 18px;
+  line-height: 1.15;
+  letter-spacing: -0.005em;
+  color: var(--ink);
+}
+.h-sub {
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1.2;
+  color: var(--ink);
+}
+.body-tight {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+.body-tight p { margin: 0 0 8px; }
+.body-tight p + p { text-indent: 1.2em; }
+.lead {
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink);
+  font-weight: 500;
+}
+
+/* Masthead nameplate (newsprint style) */
+.nameplate {
+  font-family: var(--serif);
+  font-weight: 900;
+  font-style: italic;
+  font-size: 30px;
+  letter-spacing: -0.01em;
+  line-height: 1;
+}
+
+/* Annotation (marginalia) */
+.margin-note {
+  font-family: var(--sans);
+  font-size: 9.5px;
+  line-height: 1.35;
+  color: var(--ink-3);
+}
+.margin-note .lead-word {
+  display: block;
+  font-family: var(--sans);
+  font-size: 8.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 700;
+  margin-bottom: 3px;
+}
+
+/* Scenario fan placeholder svg styles */
+.chart-frame {
+  border: 1px solid var(--rule);
+  background:
+    linear-gradient(to right, transparent 0, transparent calc(100% - 1px), var(--rule-soft) calc(100% - 1px)),
+    linear-gradient(to bottom, transparent 0, transparent calc(100% - 1px), var(--rule-soft) calc(100% - 1px));
+  background-size: 25% 25%;
+}
+
+/* Hover affordances inside an artboard (kept minimal) */
+.linkish {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid var(--accent-soft);
+  cursor: pointer;
+}
+.linkish:hover { color: var(--accent-deep); border-bottom-color: var(--accent); }

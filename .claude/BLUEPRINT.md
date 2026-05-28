@@ -96,7 +96,9 @@ The parser produces flattened USD columns like (verify exact names against a rea
   NET_NET = NIR - SDR ALLOCATIONS - OBLIGATIONS WITH INTERNATIONAL ORGANIZATIONS(near-term IMF)
   ```
   Write `data/reserves/reserves_layers.csv` with columns `date, gross_usd_bn, nir_usd_bn, net_net_usd_bn` plus the individual subtracted components (for the decomposition in 1.3). Define the column→formula mapping as a dict so it's auditable and survives parser column additions. If a required column is missing, log WARNING and set that layer to NaN (never crash).
-- **Reuse:** `RESERVES_DIR`, `get_logger`. Values in the USD CSV are already USD millions → divide by 1000 for `_bn`.
+- **Reuse:** `RESERVES_DIR`, `get_logger`. **Units: the `_usd` CSV is ALREADY in USD billions — do NOT scale.** (`INTERNATIONAL RESERVES|_total` = 46.062 means $46.062B.)
+- **Verified column names** (confirmed against the live CSV 2026-05-15): gross = `ASSETS|INTERNATIONAL RESERVES|_total`; swap = `LIABILITIES|MULTILATERAL CREDIT AGREEMENT DEBTS|_total` (currently 0.0 — keep it anyway); repos = `LIABILITIES|REPO OBLIGATIONS|_total`; encajes = `LIABILITIES|CURRENT ACCOUNTS IN OTHER CURRENCIES|_total` (the biggest subtraction, ~$15.7B); SDR = `LIABILITIES|SDR ALLOCATIONS|_total`; IMF = `LIABILITIES|OBLIGATIONS WITH INTERNATIONAL ORGANIZATIONS|_total`. Worked example: 46.062 − 0 − 8.098 − 15.701 = NIR 22.263; − 0.436 − 1.042 = Net-Net 20.785. Gold (`...|Gold (Net of Provisions)`) stays in NIR; make excluding it a config option, not a hardcoded choice.
+- **Note:** only ~2 weekly rows exist so far (parser recently refactored) — handle <13 rows gracefully; time-series/decomposition charts stay sparse until more weeks accumulate.
 - **Accept:** `reserves_layers.csv` exists; `gross > nir > net_net` for recent rows; numbers are within sane ranges (gross ~$20–45B). Print the latest row.
 
 **Task 1.2 — Wire net into the monthly series & fetch_all**

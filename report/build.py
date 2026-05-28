@@ -17,8 +17,10 @@ from utils import REPORTS_DIR, get_logger
 from .pdf_base            import ArgentinaPDF, _safe
 from .executive_summary   import build_executive_summary_section
 from .closing_synthesis   import build_closing_synthesis
+from .weekly_diff         import whats_changed, format_diff_md
 
 from ingestion.section             import build_pdf_section as ext_pdf,  build_md_section as ext_md
+from sections.fx.section          import build_pdf_section as fx_pdf,   build_md_section as fx_md
 from sections.inflation.section   import build_pdf_section as inf_pdf,  build_md_section as inf_md
 from sections.fiscal.section      import build_pdf_section as fis_pdf,  build_md_section as fis_md
 from sections.gdp.section         import build_pdf_section as gdp_pdf,  build_md_section as gdp_md
@@ -45,6 +47,7 @@ def build_report(
     production_data:  dict | None = None,
     fiscal_data:      dict | None = None,
     debt_data:        dict | None = None,
+    fx_data:          dict | None = None,
 ) -> dict[str, Path]:
     """
     Assemble the full Argentina Macro Report (PDF + Markdown).
@@ -63,6 +66,7 @@ def build_report(
     production_data = production_data or {}
     fiscal_data     = fiscal_data     or {}
     debt_data       = debt_data       or {}
+    fx_data         = fx_data         or {}
 
     today = date.today().strftime("%B %d, %Y")
 
@@ -88,6 +92,7 @@ def build_report(
     exec_summary_md = build_executive_summary_section(pdf)
 
     ext_pdf(pdf, external_data)
+    fx_pdf(pdf, fx_data)
     inf_pdf(pdf, inflation_data)
     fis_pdf(pdf, fiscal_data)
     dbt_pdf(pdf, debt_data)
@@ -114,6 +119,7 @@ def build_report(
     sections = [
         exec_summary_md,
         ext_md(external_data),
+        fx_md(fx_data),
         inf_md(inflation_data),
         fis_md(fiscal_data),
         dbt_md(debt_data),
@@ -125,7 +131,11 @@ def build_report(
         closing_md,
     ]
 
+    diff_md = format_diff_md(whats_changed())
+
     md = f"# Argentina Macro Report\n*Generated {today}*\n\n---\n\n"
+    if diff_md:
+        md += diff_md + "\n\n---\n\n"
     md += "\n\n---\n\n".join(sections)
     md += f"\n\n---\n*{_SOURCES_NOTE}*\n"
 
