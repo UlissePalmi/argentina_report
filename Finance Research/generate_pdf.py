@@ -97,8 +97,33 @@ def build_context() -> dict:
 
     verdict_key = master.get("verdict", "")
     verdict_str = VERDICT_LABELS.get(verdict_key, "Macro Monitor")
-    today_str   = date.today().strftime("%d %b %Y")
-    week_str    = date.today().strftime("Weekly · %Y-W%V")
+    today       = date.today()
+    today_str   = today.strftime("%d %b %Y")
+    week_str    = today.strftime("Weekly · %Y-W%V")
+
+    # ── CPI lag detection ──────────────────────────────────────────────────────
+    # If today is past the 15th of the month after the latest CPI data point,
+    # INDEC has likely published a new print that the API hasn't surfaced yet.
+    cpi_lag_note = ""
+    cpi_as_of = inf.get("as_of_date", "")
+    if cpi_as_of:
+        try:
+            from datetime import datetime
+            lat = datetime.strptime(cpi_as_of[:7], "%Y-%m").date().replace(day=1)
+            # first day of the month after the latest data
+            if lat.month == 12:
+                next_m = lat.replace(year=lat.year + 1, month=1)
+            else:
+                next_m = lat.replace(month=lat.month + 1)
+            expected_release = next_m.replace(day=15)
+            if today >= expected_release:
+                cpi_lag_note = (
+                    f"Note: {next_m.strftime('%B %Y')} CPI has been released by INDEC "
+                    f"but is not yet available on the datos.gob.ar API. "
+                    f"This report reflects data through {lat.strftime('%B %Y')}."
+                )
+        except Exception:
+            pass
 
     cpi_now  = _f(im.get("cpi_mom_latest"))
     res_now  = _f(em.get("gross_reserves_bn"))
@@ -261,6 +286,29 @@ def build_context() -> dict:
         {"date": "14 Aug", "label": "INDEC CPI Jul",   "accent": True},
     ]
 
+    # ── CPI release schedule ──────────────────────────────────────────────────
+    # Generate the next 5 expected INDEC CPI release dates starting from the
+    # month after the latest available data. INDEC releases ~12th of the
+    # following month; we use the 12th as the expected date.
+    cpi_schedule = []
+    if cpi_as_of:
+        try:
+            from datetime import datetime as _dt
+            def _add_months(d, n):
+                m = d.month - 1 + n
+                return d.replace(year=d.year + m // 12, month=m % 12 + 1, day=1)
+            lat_m = _dt.strptime(cpi_as_of[:7], "%Y-%m").date().replace(day=1)
+            for i in range(1, 6):
+                ref   = _add_months(lat_m, i)           # month the data covers
+                rel   = _add_months(lat_m, i + 1).replace(day=12)  # expected release
+                cpi_schedule.append({
+                    "ref":      ref.strftime("%b %Y"),
+                    "date":     rel.strftime("%d %b %Y"),
+                    "past":     rel <= today,
+                })
+        except Exception:
+            pass
+
     # ── Action tags ───────────────────────────────────────────────────────────
     cpi_sig  = "green" if cpi_now  < 3.5 else ("amber" if cpi_now  < 5.0 else "red")
     res_sig  = "green" if res_6m   > 2   else ("amber" if res_6m   > -2  else "red")
@@ -312,6 +360,8 @@ def build_context() -> dict:
         "prints":        prints,
         "charts":        charts,
         "action_tags":   action_tags,
+        "cpi_lag_note":   cpi_lag_note,
+        "cpi_schedule":   cpi_schedule,
     }
 
 
@@ -325,7 +375,14 @@ def generate() -> None:
         loader=jinja2.FileSystemLoader(str(HERE)),
         autoescape=True,
     )
-    html_str = env.get_template("template.html").render(**ctx)
+    tmpl = env.get_template("template.html")
+
+    # Pre-render with dummy total to count actual pages, then re-render with real count
+    draft = tmpl.render(**{**ctx, "total_pages": 0})
+    total_pages = draft.count('class="doc-page"')
+    ctx["total_pages"] = total_pages
+
+    html_str = tmpl.render(**ctx)
 
     # Write rendered HTML to a stable path (temp files get deleted before Edge reads them)
     render_path = HERE / "_render.html"

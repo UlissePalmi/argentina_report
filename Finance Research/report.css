@@ -543,6 +543,17 @@ hr.rule-accent{ border: none; border-top: 2pt solid var(--accent);     margin: 4
   margin-top: 2pt;
 }
 
+.data-lag-note {
+  font-family: var(--sans);
+  font-size: 6.5pt;
+  color: var(--accent);
+  border: 1pt solid var(--accent);
+  background: #f9ede8;
+  padding: 3pt 6pt;
+  margin-top: 4pt;
+  line-height: 1.45;
+}
+
 /* ─── Heatmap / scorecard ────────────────────────────────── */
 
 .heatmap-table {

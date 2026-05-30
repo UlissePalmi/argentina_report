@@ -17,22 +17,26 @@ from report.signal_text import load_signal, render_signal_callout, render_signal
 
 log = get_logger("inflation.section")
 
-GREEN  = "#2f9e44"
-RED    = "#c92a2a"
-ORANGE = "#e67700"
+PAPER   = "#f4f0e6"
+ACCENT  = "#a23b1f"
+INK     = "#1a1714"
+INK_3   = "#6b625a"
+INK_4   = "#9a9087"
+RULE    = "#c9bfae"
 
 CHART_STYLE = {
-    "figure.facecolor": "#ffffff",
-    "axes.facecolor": "#f8f9fa",
-    "axes.edgecolor": "#dee2e6",
-    "axes.labelcolor": "#212529",
-    "xtick.color": "#495057",
-    "ytick.color": "#495057",
-    "text.color": "#212529",
-    "grid.color": "#dee2e6",
-    "grid.linewidth": 0.8,
-    "lines.linewidth": 2.0,
-    "font.family": "DejaVu Sans",
+    "figure.facecolor": PAPER,
+    "axes.facecolor":   PAPER,
+    "axes.edgecolor":   RULE,
+    "axes.labelcolor":  INK_3,
+    "xtick.color":      INK_4,
+    "ytick.color":      INK_4,
+    "text.color":       INK,
+    "grid.color":       RULE,
+    "grid.linewidth":   0.6,
+    "lines.linewidth":  1.8,
+    "font.family":      "DejaVu Sans",
+    "font.size":        8,
 }
 
 
@@ -42,30 +46,39 @@ def chart_inflation(cpi_df: pd.DataFrame | None) -> str | None:
     path = str(CHARTS_DIR / "chart_inflation.png")
     df12 = cpi_df.tail(12)
     with plt.rc_context(CHART_STYLE):
-        fig, ax1 = plt.subplots(figsize=(10, 4.5))
+        fig, ax1 = plt.subplots(figsize=(10, 4.2))
         dates = pd.to_datetime(df12["date"])
-        bar_colors = [RED if v > 5 else ORANGE if v > 2 else GREEN
-                      for v in df12["cpi_mom_pct"].fillna(0)]
-        ax1.bar(dates, df12["cpi_mom_pct"], color=bar_colors, width=20, label="MoM CPI % (LHS)")
-        ax1.set_ylabel("Monthly CPI Change (%)")
+        ax1.bar(dates, df12["cpi_mom_pct"], color=ACCENT, width=20, alpha=0.9, label="MoM CPI %")
+        ax1.set_ylabel("MoM %", fontsize=7.5, color=INK_3)
+        ax1.tick_params(axis="y", labelsize=7.5)
+        # Remove top/right spines
+        ax1.spines["top"].set_visible(False)
+        ax1.spines["right"].set_visible(False)
+        ax1.spines["left"].set_color(RULE)
+        ax1.spines["bottom"].set_color(RULE)
         if "cpi_yoy_pct" in df12.columns and df12["cpi_yoy_pct"].notna().any():
             ax2 = ax1.twinx()
-            ax2.plot(dates, df12["cpi_yoy_pct"], color=ORANGE, linewidth=2,
-                     linestyle="--", label="Annual CPI % (RHS)")
-            ax2.set_ylabel("Annual CPI Change (%)", color=ORANGE)
-            ax2.tick_params(axis="y", labelcolor=ORANGE)
+            ax2.plot(dates, df12["cpi_yoy_pct"], color=INK_3, linewidth=1.5,
+                     linestyle="--", label="YoY CPI %")
+            ax2.set_ylabel("YoY %", fontsize=7.5, color=INK_3)
+            ax2.tick_params(axis="y", labelsize=7.5, labelcolor=INK_4)
+            ax2.spines["top"].set_visible(False)
+            ax2.spines["right"].set_color(RULE)
             lines2, labels2 = ax2.get_legend_handles_labels()
         else:
             lines2, labels2 = [], []
-        ax1.set_title("CPI Inflation", fontsize=13, fontweight="bold", pad=10)
-        ax1.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
-        ax1.xaxis.set_major_locator(mdates.MonthLocator(interval=1))
-        plt.xticks(rotation=45, ha="right", fontsize=8)
-        ax1.grid(True, axis="y", alpha=0.4)
+        ax1.xaxis.set_major_formatter(mdates.DateFormatter("%m/%y"))
+        ax1.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
+        plt.xticks(rotation=35, ha="right", fontsize=7.5)
+        ax1.grid(True, axis="y", alpha=0.5, linewidth=0.5)
         lines1, labels1 = ax1.get_legend_handles_labels()
-        ax1.legend(lines1 + lines2, labels1 + labels2, framealpha=0.8, fontsize=9)
-        fig.tight_layout()
-        fig.savefig(path, dpi=150, bbox_inches="tight")
+        ax1.legend(
+            lines1 + lines2, labels1 + labels2,
+            frameon=True, framealpha=0.85, facecolor=PAPER,
+            edgecolor=RULE, fontsize=7.5, loc="upper right",
+        )
+        fig.tight_layout(pad=0.6)
+        fig.savefig(path, dpi=150, bbox_inches="tight", facecolor=PAPER)
         plt.close(fig)
     log.info("Chart saved: %s", path)
     return path

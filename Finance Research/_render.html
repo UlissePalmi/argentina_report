@@ -8,6 +8,7 @@
 <body>
 
 
+
 <section class="doc-page">
 
   
@@ -29,7 +30,7 @@
     <hr class="rule-thick" style="margin: 8pt 0 0 0;">
     <div class="masthead-edition-row">
       <span class="masthead-edition-text">Structural Improvement — Unconfirmed &nbsp;·&nbsp; Weekly Edition</span>
-      <span class="masthead-page-label">Page 1 of 4 &nbsp;·&nbsp; Distribute Internally</span>
+      <span class="masthead-page-label">Page 1 of 5 &nbsp;·&nbsp; Distribute Internally</span>
     </div>
     <hr class="rule" style="margin: 0 0 10pt 0;">
   </div>
@@ -220,7 +221,7 @@
 
   <footer class="page-foot">
     <span class="page-foot-left">Argentina Macro Monitor — Confidential. For informational purposes only.</span>
-    <span class="page-foot-right">1</span>
+    <span class="page-foot-right">1 of 5</span>
   </footer>
 
 </section>
@@ -360,7 +361,7 @@
 
   <footer class="page-foot">
     <span class="page-foot-left">Argentina Macro Monitor — Data: INDEC · BCRA · dolarapi.com</span>
-    <span class="page-foot-right">2</span>
+    <span class="page-foot-right">2 of 5</span>
   </footer>
 
 </section>
@@ -378,15 +379,26 @@
     <span class="section-numeral">§II</span>
     <div class="section-rule"></div>
   </div>
-  <h2 class="section-title">Inflation &amp; Fiscal Balance</h2>
-  <p class="section-sub">CPI disinflation path · primary surplus · recent data releases</p>
+  <h2 class="section-title">Inflation</h2>
+  <p class="section-sub">CPI disinflation path · monthly and annual rate</p>
 
-  <div class="two-col two-col-7-5">
+  <div class="two-col two-col-6-6">
 
     <div>
       <div class="block-head">
-        <span class="kicker">Inflation</span>
-        <h3 class="block-title">CPI MoM — 24 months</h3>
+        <span class="kicker">Analysis</span>
+        <h3 class="block-title">Inflation Commentary</h3>
+      </div>
+      <hr class="rule">
+      <div class="chart-placeholder" style="min-height:160pt;">
+        <span>Placeholder — commentary to be added</span>
+      </div>
+    </div>
+
+    <div>
+      <div class="block-head">
+        <span class="kicker">CPI MoM</span>
+        <h3 class="block-title">CPI MoM — 12 months</h3>
       </div>
       <hr class="rule">
       <div class="chart-wrap">
@@ -394,21 +406,56 @@
         <img src="file:///C:/Users/spide/Documents/Coding_Projects/argentina_report/data/charts/chart_inflation.png" alt="CPI chart">
         
         <p class="chart-caption">INDEC headline CPI · % MoM</p>
+        
+        <p class="data-lag-note">&#9888; Note: April 2026 CPI has been released by INDEC but is not yet available on the datos.gob.ar API. This report reflects data through March 2026.</p>
+        
       </div>
-    </div>
 
-    <div>
-      <div class="block-head">
-        <span class="kicker">Fiscal</span>
-        <h3 class="block-title">Primary Balance · % GDP</h3>
+      <div class="block-head" style="margin-top:8pt;">
+        <span class="kicker">Release Calendar</span>
+        <h3 class="block-title">Upcoming CPI Releases</h3>
       </div>
       <hr class="rule">
-      <div class="chart-wrap">
-        
-        <img src="file:///C:/Users/spide/Documents/Coding_Projects/argentina_report/data/charts/chart_fiscal.png" alt="Fiscal chart">
-        
-        <p class="chart-caption">MECON monthly primary balance · % of GDP</p>
-      </div>
+      <table class="catalyst-table">
+        <tbody>
+          
+          <tr>
+            <td class="catalyst-date">12 May 2026</td>
+            <td class="catalyst-label">
+              INDEC CPI Apr 2026 &#10003;
+            </td>
+          </tr>
+          
+          <tr>
+            <td class="catalyst-date">12 Jun 2026</td>
+            <td class="catalyst-label accent">
+              INDEC CPI May 2026
+            </td>
+          </tr>
+          
+          <tr>
+            <td class="catalyst-date">12 Jul 2026</td>
+            <td class="catalyst-label accent">
+              INDEC CPI Jun 2026
+            </td>
+          </tr>
+          
+          <tr>
+            <td class="catalyst-date">12 Aug 2026</td>
+            <td class="catalyst-label accent">
+              INDEC CPI Jul 2026
+            </td>
+          </tr>
+          
+          <tr>
+            <td class="catalyst-date">12 Sep 2026</td>
+            <td class="catalyst-label accent">
+              INDEC CPI Aug 2026
+            </td>
+          </tr>
+          
+        </tbody>
+      </table>
     </div>
 
   </div>
@@ -471,8 +518,8 @@
   </table>
 
   <footer class="page-foot">
-    <span class="page-foot-left">Argentina Macro Monitor — Data: INDEC · MECON</span>
-    <span class="page-foot-right">3</span>
+    <span class="page-foot-left">Argentina Macro Monitor — Data: INDEC</span>
+    <span class="page-foot-right">3 of 5</span>
   </footer>
 
 </section>
@@ -488,6 +535,41 @@
 
   <div class="section-head">
     <span class="section-numeral">§III</span>
+    <div class="section-rule"></div>
+  </div>
+  <h2 class="section-title">Fiscal Balance</h2>
+  <p class="section-sub">Primary surplus · % of GDP · monthly trend</p>
+
+  <div class="block-head">
+    <span class="kicker">Fiscal</span>
+    <h3 class="block-title">Primary Balance · % GDP</h3>
+  </div>
+  <hr class="rule">
+  <div class="chart-wrap">
+    
+    <img src="file:///C:/Users/spide/Documents/Coding_Projects/argentina_report/data/charts/chart_fiscal.png" alt="Fiscal chart">
+    
+    <p class="chart-caption">MECON monthly primary balance · % of GDP</p>
+  </div>
+
+  <footer class="page-foot">
+    <span class="page-foot-left">Argentina Macro Monitor — Data: MECON</span>
+    <span class="page-foot-right">4 of 5</span>
+  </footer>
+
+</section>
+
+
+
+<section class="doc-page">
+
+  <header class="page-head">
+    <span class="page-head-firm">Argentina Macro Monitor</span>
+    <span class="page-head-meta">Weekly · 2026-W22 &nbsp;·&nbsp; 28 May 2026</span>
+  </header>
+
+  <div class="section-head">
+    <span class="section-numeral">§IV</span>
     <div class="section-rule"></div>
   </div>
   <h2 class="section-title">Signal Scorecard &amp; Risks</h2>
@@ -639,7 +721,7 @@
 
   <footer class="page-foot">
     <span class="page-foot-left">Argentina Macro Monitor — Data: INDEC · BCRA · MECON · WB · IMF</span>
-    <span class="page-foot-right">4</span>
+    <span class="page-foot-right">5 of 5</span>
   </footer>
 
 </section>
