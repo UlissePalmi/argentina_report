@@ -34,12 +34,16 @@ dependencies = [
     { name = "openpyxl" },
     { name = "pandas" },
     { name = "pdfplumber" },
-    { name = "playwright" },
     { name = "requests" },
     { name = "statsmodels" },
+    { name = "xlrd" },
+]
+
+[package.optional-dependencies]
+pdf = [
+    { name = "playwright" },
     { name = "weasyprint" },
     { name = "xhtml2pdf" },
-    { name = "xlrd" },
 ]
 
 [package.metadata]
@@ -50,14 +54,15 @@ requires-dist = [
     { name = "numpy", specifier = ">=2.4.4" },
     { name = "openpyxl", specifier = ">=3.1.5" },
     { name = "pandas", specifier = ">=3.0.2" },
-    { name = "pdfplumber", specifier = ">=0.11.9" },
-    { name = "playwright", specifier = ">=1.60.0" },
+    { name = "pdfplumber", specifier = ">=0.11.5" },
+    { name = "playwright", marker = "extra == 'pdf'", specifier = ">=1.60.0" },
     { name = "requests", specifier = ">=2.33.1" },
     { name = "statsmodels", specifier = ">=0.14.6" },
-    { name = "weasyprint", specifier = ">=68.1" },
-    { name = "xhtml2pdf", specifier = ">=0.2.17" },
+    { name = "weasyprint", marker = "extra == 'pdf'", specifier = ">=68.1" },
+    { name = "xhtml2pdf", marker = "extra == 'pdf'", specifier = ">=0.2.17" },
     { name = "xlrd", specifier = ">=2.0.2" },
 ]
+provides-extras = ["pdf"]
 
 [[package]]
 name = "asn1crypto"
